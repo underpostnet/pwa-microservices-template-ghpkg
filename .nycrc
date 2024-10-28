@@ -1,0 +1,9 @@
+{
+  "exclude": [],
+  "include": ["test"],
+  "output": "reports",
+  "reporter": ["html", "text", "lcov", "text-lcov", "cobertura"],
+  "sourceMap": true,
+  "instrument": true,
+  "all": true
+}
