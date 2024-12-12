@@ -2,7 +2,7 @@
     "type": "module",
     "main": "src/index.js",
     "name": "@underpostnet/underpost",
-    "version": "2.7.91",
+    "version": "2.7.92",
     "description": "pwa api rest template",
     "scripts": {
         "start": "env-cmd -f .env.production node --max-old-space-size=8192 src/server",
@@ -124,7 +124,7 @@
         "mocha": "^10.4.0",
         "plantuml": "^0.0.2",
         "swagger-autogen": "^2.23.7",
-        "to-json-schema": "^0.2.5"
+        "easy-json-schema": "^0.0.2-beta"
     },
     "publishConfig": {
         "provenance": true,
