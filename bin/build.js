@@ -245,7 +245,7 @@ const { DefaultConf } = await import(`../conf.${confName}.js`);
         fs.copyFileSync(originPath, `${basePath}/src/client/${capName}.index.js`);
       }
     }
-    if (false) {
+    {
       const originPath = `./src/client/public/${client}`;
       if (fs.existsSync(originPath)) {
         logger.info(`Build`, originPath);
