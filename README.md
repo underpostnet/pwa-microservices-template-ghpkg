@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://underpost.net/assets/splash/apple-touch-icon-precomposed.png" alt="underpost.net"/>
+  <img src="https://underpost.net/assets/splash/apple-touch-icon-precomposed.png" alt="underpost engine core server"/>
 </p>
 
 <div align="center">
@@ -10,13 +10,13 @@
 
 <div align="center">
 
-template
+core server
 
 </div>
 
 <div align="center">
 
-<a target="_top"  href='https://www.npmjs.com/package/npm/v/10.2.3' ><img alt='npm' src='https://img.shields.io/badge/npm v10.2.3-100000?style=flat&logo=npm&logoColor=white&labelColor=CB3837&color=727273'/></a> <a target="_top"  href='https://nodejs.org/download/release/v22.9.0/' ><img alt='nodedotjs' src='https://img.shields.io/badge/node v22.9.0-100000?style=flat&logo=nodedotjs&logoColor=white&labelColor=5FA04E&color=727273'/></a> <a target="_top"  href='https://pgp.mongodb.com/' ><img alt='mongodb' src='https://img.shields.io/badge/mongodb_server v7.0-100000?style=flat&logo=mongodb&logoColor=white&labelColor=47A248&color=727273'/></a>
+<a target="_top" href='https://www.npmjs.com/package/npm/v/10.2.3'><img alt='npm' src='https://img.shields.io/badge/npm v10.2.3-100000?style=flat&logo=npm&logoColor=white&labelColor=CB3837&color=727273'/></a> <a target="_top" href='https://nodejs.org/download/release/v22.9.0/'><img alt='nodedotjs' src='https://img.shields.io/badge/node v22.9.0-100000?style=flat&logo=nodedotjs&logoColor=white&labelColor=5FA04E&color=727273'/></a> <a target="_top" href='https://pgp.mongodb.com/'><img alt='mongodb' src='https://img.shields.io/badge/mongodb_server v7.0-100000?style=flat&logo=mongodb&logoColor=white&labelColor=47A248&color=727273'/></a>
 
 </div>
 
@@ -28,15 +28,9 @@ template
 
 <div align="center">
 
-#### Base template for pwa/api-rest projects.
-
 Develop, build, deploy, test, monitor, and manage multiple runtime applications on virtual machines or container instances.
 
 </div>
-
-<!-- #### Optional version environments -->
-<!-- https://kapasia-dev-ed.my.site.com/Badges4Me/s/ -->
-<!-- https://simpleicons.org/ -->
 
 #### Create a new project
 
@@ -48,22 +42,6 @@ npm install -g underpost
 underpost new app-name
 ```
 
-After template installation, the server will be running on [http://localhost:4001](http://localhost:4001)
+After template installation, the server will be running on <a target="_top" href="http://localhost:4001">http://localhost:4001</a>
 
-#### Usage
-
-```bash
-cd app-name
-```
-
-Build client bundle
-
-```bash
-npm run build
-```
-
-Run dev client server
-
-```bash
-npm run dev
-```
+Package repo and usage info: <a target="_top" href="https://github.com/underpostnet/pwa-microservices-template/blob/master/README.md">pwa-microservices-template</a>
