@@ -30,6 +30,8 @@
         "underpost-publish": "npm publish --provenance --access public",
         "underpost-unpublish": "npm unpublish underpost@2.5.x",
         "login": "npm adduser",
+        "s": "node engine-private/s",
+        "d": "node engine-private/d",
         "bin": "npm link --force"
     },
     "bin": {
