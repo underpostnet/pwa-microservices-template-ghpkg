@@ -38,7 +38,7 @@ Develop, build, deploy, test, monitor, and manage multiple runtime applications 
 <!-- https://kapasia-dev-ed.my.site.com/Badges4Me/s/ -->
 <!-- https://simpleicons.org/ -->
 
-#### Create a new project
+## Create a new project
 
 ```bash
 npm install -g underpost
@@ -50,7 +50,7 @@ underpost new app-name
 
 After template installation, the server will be running on [http://localhost:4001](http://localhost:4001)
 
-#### Usage
+## Usage
 
 ```bash
 cd app-name
@@ -67,3 +67,41 @@ Run dev client server
 ```bash
 npm run dev
 ```
+<!-- -->
+## underpost ci/cd cli v2.8.651
+
+### Usage: `underpost [options] [command]`
+  ```
+ Options:
+  -V, --version                                              output the version number
+  -h, --help                                                 display help for command
+
+Commands:
+  new <app-name>                                             Create a new project
+  start [options] <deploy-id> [env]                          Start up server, build pipelines, or services
+  clone [options] <uri>                                      Clone github repository
+  pull <path> <uri>                                          Pull github repository
+  cmt [options] <path> <commit-type> [module-tag] [message]  Commit github repository
+  push [options] <path> <uri>                                Push github repository
+  env <deploy-id> [env]                                      Set environment variables files and conf related to <deploy-id>
+  config <operator> [key] [value]                            Manage configuration, operators
+  root                                                       Get npm root path
+  cluster [options] [pod-name]                               Manage cluster, for default initialization base kind cluster
+  deploy [options] <deploy-list> [env]                       Manage deployment, for default deploy development pods
+  secret [options] <platform>                                Manage secrets
+  dockerfile-image-build [options]                           Build image from Dockerfile
+  dockerfile-pull-base-images                                Pull underpost dockerfile images requirements
+  install                                                    Fast import underpost npm dependencies
+  db [options] <deploy-list>                                 Manage databases
+  script [options] <operator> <script-name> [script-value]   Supports a number of built-in underpost global scripts and their preset life cycle events as well as arbitrary scripts
+  cron [options] [deploy-list] [job-list]                    Cron jobs management
+  fs [options] [path]                                        File storage management, for default upload file
+  test [options] [deploy-list]                               Manage Test, for default run current underpost default test
+  monitor [options] <deploy-id> [env]                        Monitor health server management
+  help [command]                                             display help for command
+ 
+```
+      
+<a target="_top" href="https://github.com/underpostnet/pwa-microservices-template/blob/master/cli.md">See complete CLI Docs here.</a>
+      
+
