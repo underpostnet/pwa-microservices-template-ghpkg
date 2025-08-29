@@ -151,8 +151,8 @@ const { DefaultConf } = await import(`../conf.${confName}.js`);
 
   fs.copyFileSync(`./conf.${confName}.js`, `${basePath}/conf.js`);
   fs.copyFileSync(
-    `./.github/workflows/engine.${confName.split('dd-')[1]}.ci.yml`,
-    `${basePath}/.github/workflows/engine.${confName.split('dd-')[1]}.ci.yml`,
+    `./.github/workflows/engine-${confName.split('dd-')[1]}.ci.yml`,
+    `${basePath}/.github/workflows/engine-${confName.split('dd-')[1]}.ci.yml`,
   );
 
   switch (confName) {
@@ -183,5 +183,6 @@ const { DefaultConf } = await import(`../conf.${confName}.js`);
       fs.copyFileSync(`./manifests/deployment/${confName}-${env}/${file}`, `${basePath}/${file}`);
     }
   }
-  fs.copyFileSync(`./.github/workflows/deploy.${confName}.yml`, `${basePath}/.github/workflows/deploy.${confName}.yml`);
+  fs.copyFileSync(`./.github/workflows/${confName}.ci.yml`, `${basePath}/.github/workflows/${confName}.ci.yml`);
+  fs.copyFileSync(`./.github/workflows/${confName}.cd.yml`, `${basePath}/.github/workflows/${confName}.cd.yml`);
 }
