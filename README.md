@@ -16,7 +16,6 @@
 
 <div align="center">
 
-
 <!-- badges -->
 
 
@@ -24,8 +23,6 @@
 
 
 <!-- end-badges -->
-
-
 
 </div>
 
