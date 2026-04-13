@@ -340,19 +340,8 @@ class UnderpostRepository {
       }
       if (options.log || options.unpush) {
         if (options.unpush) {
-          const branch = shellExec(`cd ${repoPath} && git branch --show-current`, {
-            stdout: true,
-            silent: true,
-            disableLog: true,
-          }).trim();
-          shellExec(`cd ${repoPath} && git fetch origin 2>/dev/null`, { silent: true, disableLog: true });
-          const unpushCount = shellExec(`cd ${repoPath} && git rev-list --count origin/${branch}..HEAD 2>/dev/null`, {
-            stdout: true,
-            silent: true,
-            disableLog: true,
-          }).trim();
-          const count = parseInt(unpushCount);
-          if (isNaN(count) || count <= 0) {
+          const { count, hasUnpushed } = Underpost.repo.getUnpushedCount(repoPath);
+          if (!hasUnpushed) {
             logger.warn('No unpushed commits found');
             return;
           }
@@ -600,14 +589,9 @@ class UnderpostRepository {
                   logger.info(`Created repository directory: ${repo.path}`);
                 }
 
-                // Initialize git repository
-                shellExec(`cd ${repo.path} && git init`, { disableLog: false });
-                logger.info(`Initialized git repository in: ${repo.path}`);
-
-                // Add remote origin
                 const remoteUrl = `https://${token ? `${token}@` : ''}github.com/${username}/${repo.name}.git`;
-                shellExec(`cd ${repo.path} && git remote add origin ${remoteUrl}`, { disableLog: false });
-                logger.info(`Added remote origin for: ${repo.name}`);
+                UnderpostRepository.API.initLocalRepo({ path: repo.path, origin: remoteUrl });
+                logger.info(`Initialized git repository with remote: ${repo.name}`);
               }
             }
             return resolve(true);
@@ -626,7 +610,8 @@ class UnderpostRepository {
                 fs.readFileSync(`${underpostRoot}/.dockerignore`, 'utf8'),
                 'utf8',
               );
-              shellExec(`cd ${destFolder} && git init && git add . && git commit -m "Base template implementation"`);
+              UnderpostRepository.API.initLocalRepo({ path: destFolder });
+              shellExec(`cd ${destFolder} && git add . && git commit -m "Base template implementation"`);
             }
             shellExec(`cd ${destFolder} && npm run build`);
             shellExec(`cd ${destFolder} && npm run dev`);
@@ -1246,6 +1231,31 @@ Prevent build private config repo.`,
     },
 
     /**
+     * Returns metadata about unpushed commits in a git repository.
+     * Fetches from origin, then counts commits ahead of the remote branch.
+     * @param {string} [repoPath='.'] - Path to the git repository.
+     * @param {number} [fallback=1] - Value to return as `count` when no unpushed commits are detected.
+     * @returns {{ count: number, branch: string, hasUnpushed: boolean }} Unpush metadata.
+     * @memberof UnderpostRepository
+     */
+    getUnpushedCount(repoPath = '.', fallback = 1) {
+      const branch = shellExec(`cd ${repoPath} && git branch --show-current`, {
+        stdout: true,
+        silent: true,
+        disableLog: true,
+      }).trim();
+      shellExec(`cd ${repoPath} && git fetch origin 2>/dev/null`, { silent: true, disableLog: true });
+      const raw = shellExec(`cd ${repoPath} && git rev-list --count origin/${branch}..HEAD 2>/dev/null`, {
+        stdout: true,
+        silent: true,
+        disableLog: true,
+      }).trim();
+      const count = parseInt(raw);
+      const hasUnpushed = !isNaN(count) && count > 0;
+      return { count: hasUnpushed ? count : fallback, branch, hasUnpushed };
+    },
+
+    /**
      * Sanitizes a markdown changelog string into a compact message format.
      * Strips date headers, converts section tags to `[tag]` prefixes, removes bullet markers and special characters.
      * @param {string} message - The raw markdown changelog output.
@@ -1266,6 +1276,108 @@ Prevent build private config repo.`,
         .join('\n')
         .trim()
         .replaceAll('] - ', '] ');
+    },
+
+    /**
+     * Manages a cron-backup Git repository: clone, pull, commit, or push.
+     * Resolves the repository path as `../<repoName>` relative to the CWD.
+     * Requires the `GITHUB_USERNAME` environment variable to be set.
+     * @param {object} params
+     * @param {string} params.repoName - Repository name (e.g. `engine-cyberia-cron-backups`).
+     * @param {'clone'|'pull'|'commit'|'push'} params.operation - Git operation to perform.
+     * @param {string} [params.message=''] - Commit message (used by the `commit` operation).
+     * @param {boolean} [params.forceClone=false] - Remove existing clone before re-cloning.
+     * @returns {boolean} `true` on success, `false` if GITHUB_USERNAME is unset or on error.
+     * @memberof UnderpostRepository
+     */
+    /**
+     * Initializes a git repository at the given path and configures user identity
+     * from environment variables (`GITHUB_USERNAME` / `GITHUB_EMAIL`).
+     * Safe to call on an already-initialized repo — only runs `git init` when
+     * `.git` is absent and always ensures user.name / user.email are set.
+     * @param {object} opts
+     * @param {string} opts.path       - Absolute or relative path to the repository.
+     * @param {string} [opts.origin]   - If provided, sets or updates git remote `origin`.
+     * @memberof UnderpostRepository
+     */
+    initLocalRepo({ path: repoPath, origin }) {
+      const gitUsername = process.env.GITHUB_USERNAME || 'underpostnet';
+      const gitEmail = process.env.GITHUB_EMAIL || `development@underpost.net`;
+
+      if (!fs.existsSync(`${repoPath}/.git`)) {
+        shellExec(`cd "${repoPath}" && git init`);
+      }
+      shellExec(`cd "${repoPath}" && git config user.name '${gitUsername}'`);
+      shellExec(`cd "${repoPath}" && git config user.email '${gitEmail}'`);
+
+      if (origin) {
+        const currentRemote = shellExec(`cd "${repoPath}" && git remote get-url origin 2>/dev/null || true`, {
+          stdout: true,
+          silent: true,
+        }).trim();
+        if (!currentRemote) {
+          shellExec(`cd "${repoPath}" && git remote add origin "${origin}"`);
+        } else if (currentRemote !== origin) {
+          shellExec(`cd "${repoPath}" && git remote set-url origin "${origin}"`);
+        }
+      }
+    },
+
+    manageBackupRepo({ repoName, operation, message = '', forceClone = false }) {
+      try {
+        const username = process.env.GITHUB_USERNAME;
+        if (!username) {
+          logger.error('GITHUB_USERNAME environment variable not set');
+          return false;
+        }
+
+        const repoPath = `../${repoName}`;
+
+        switch (operation) {
+          case 'clone':
+            if (forceClone && fs.existsSync(repoPath)) {
+              logger.info(`Force clone: removing existing repository: ${repoName}`);
+              fs.removeSync(repoPath);
+            }
+            if (!fs.existsSync(repoPath)) {
+              shellExec(`cd .. && underpost clone ${username}/${repoName}`);
+              logger.info(`Cloned repository: ${repoName}`);
+            }
+            break;
+
+          case 'pull':
+            if (fs.existsSync(repoPath)) {
+              shellExec(`cd ${repoPath} && git checkout . && git clean -f -d`);
+              shellExec(`cd ${repoPath} && underpost pull . ${username}/${repoName}`, { silent: true });
+              logger.info(`Pulled repository: ${repoName}`);
+            }
+            break;
+
+          case 'commit':
+            if (fs.existsSync(repoPath)) {
+              shellExec(`cd ${repoPath} && git add .`);
+              shellExec(`underpost cmt ${repoPath} backup '' '${message}'`);
+              logger.info(`Committed to repository: ${repoName}`, { message });
+            }
+            break;
+
+          case 'push':
+            if (fs.existsSync(repoPath)) {
+              shellExec(`cd ${repoPath} && underpost push . ${username}/${repoName}`, { silent: true });
+              logger.info(`Pushed repository: ${repoName}`);
+            }
+            break;
+
+          default:
+            logger.warn(`Unknown git operation: ${operation}`);
+            return false;
+        }
+
+        return true;
+      } catch (error) {
+        logger.error(`Git operation failed`, { repoName, operation, error: error.message });
+        return false;
+      }
     },
   };
 }

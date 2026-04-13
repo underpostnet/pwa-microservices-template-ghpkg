@@ -8,7 +8,8 @@ import fs from 'fs-extra';
 import { loggerFactory } from './logger.js';
 import { shellExec } from './process.js';
 import Underpost from '../index.js';
-import { loadCronDeployEnv } from './conf.js';
+import { loadCronDeployEnv, readConfJson } from './conf.js';
+import { WpService } from '../runtime/wp/Wp.js';
 
 const logger = loggerFactory(import.meta);
 
@@ -56,6 +57,23 @@ class BackUp {
       } else {
         logger.info('Executing database export for', deployId);
         shellExec(command);
+      }
+      {
+        const confServer = readConfJson(deployId, 'server');
+        for (const host of Object.keys(confServer)) {
+          for (const path of Object.keys(confServer[host])) {
+            const entry = confServer[host][path];
+            try {
+              switch (entry.runtime) {
+                case 'wp':
+                  WpService.backup({ host, repository: entry.repository });
+                  break;
+              }
+            } catch (err) {
+              logger.error(`Error during entry runtime backup for ${host}${path}:`, err);
+            }
+          }
+        }
       }
     }
   };

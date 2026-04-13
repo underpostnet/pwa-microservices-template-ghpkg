@@ -35,8 +35,13 @@ RUN mkdir -p /opt/lampp/htdocs && \
 ENV PATH="/opt/lampp/bin:/usr/local/bin:${PATH}"
 RUN echo 'export PATH="/opt/lampp/bin:/usr/local/bin:${PATH}"' > /etc/profile.d/lampp.sh
 
-# Provide a no-op sendmail so PHP plugins don't error on mail calls
+# Provide a no-op sendmail so WP plugins don't error on mail calls
 RUN printf '#!/bin/sh\ncat > /dev/null\n' > /usr/sbin/sendmail && chmod +x /usr/sbin/sendmail
+
+# Install WP-CLI
+RUN curl -sL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp && \
+    chmod +x /usr/local/bin/wp && \
+    wp --info --allow-root
 
 # Install Node.js
 RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash -
@@ -55,3 +60,4 @@ EXPOSE 80
 EXPOSE 443
 EXPOSE 3000-3100
 EXPOSE 4000-4100
+
