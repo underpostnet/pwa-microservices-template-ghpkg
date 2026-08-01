@@ -1809,40 +1809,108 @@ const readConfInstances = (deployId) => {
 
 /**
  * @method loadInstanceTopology
- * @description Returns `{ default, variants }` describing the deploy's instance
- * variants, or `null` when the deploy is single-instance. The topology is
- * declared per instance entry (`entry.multiInstance.default` / `.variants`); all
- * multi-instance entries share the same variant set, so this returns it from the
- * first entry that declares one.
+ * @description Returns normalized variants describing the deploy's instance
+ * topology, or `null` when the deploy is single-instance. The root path is the
+ * default variant; no separate default code is declared.
  * @param {string} deployId - Deployment identifier (e.g. `dd-cyberia`).
- * @returns {?{default: string, variants: Array<object>}} The topology, or `null`.
+ * @returns {?{variants: Array<object>}} The topology, or `null`.
  * @memberof ServerConfBuilder
  */
 const loadInstanceTopology = (deployId) => {
   for (const entry of readConfInstances(deployId)) {
     const mi = entry.multiInstance;
     if (mi && Array.isArray(mi.variants) && mi.variants.length > 0)
-      return { default: mi.default || mi.variants[0].code, variants: mi.variants };
+      return normalizeInstanceTopology(mi, `${deployId}/${entry.id}`);
   }
   return null;
 };
 
 /**
- * @method resolveInstanceEnvValue
- * @description Resolves one declared env value. A plain string is used verbatim;
- * an object is treated as env-scoped (`{ development, production }`), matching the
- * convention already used by `lifecycle` / `readinessProbe` / `livenessProbe`.
- * Placeholders are substituted from the variant tokens.
- * @param {string|object} value - Declared value.
- * @param {string} env - `development` | `production`.
- * @param {Object<string,string>} tokens - Placeholder name → replacement.
- * @returns {?string} Resolved value, or `null` when the env has no entry.
+ * @method normalizeInstanceTopology
+ * @description Expands the compact `multiInstance.variants` path list into the
+ * descriptors used by deploy tooling. `/` is always the default and keeps the
+ * template workload id. `/FOREST` produces code `FOREST`, slug `/forest`, and
+ * path `/FOREST`. A missing root entry is prepended automatically.
+ * @param {{variants?: Array<string>}} spec - Multi-instance specification.
+ * @param {string} [context] - Configuration location used in validation errors.
+ * @returns {{variants: Array<{code:string,slug:string,path:string,isDefault:boolean}>}}
  * @memberof ServerConfBuilder
  */
-const resolveInstanceEnvValue = (value, env, tokens) => {
-  const scoped = value && typeof value === 'object' && !Array.isArray(value) ? value[env] : value;
-  if (scoped === undefined || scoped === null) return null;
-  return `${scoped}`.replace(/\{\{(\w+)\}\}/g, (match, token) => (token in tokens ? tokens[token] : match));
+const normalizeInstanceTopology = (spec, context = 'multiInstance') => {
+  const declaredPaths = spec?.variants;
+  if (!Array.isArray(declaredPaths) || declaredPaths.length === 0) return { variants: [] };
+  if (declaredPaths.some((path) => typeof path !== 'string'))
+    throw new Error(`${context}: multiInstance.variants must contain only path strings`);
+  if (new Set(declaredPaths).size !== declaredPaths.length)
+    throw new Error(`${context}: multiInstance.variants contains a duplicate path`);
+  const paths = ['/', ...declaredPaths.filter((path) => path !== '/')];
+
+  const variants = paths.map((path) => {
+    if (path !== '/' && !/^\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(path))
+      throw new Error(`${context}: invalid instance variant path "${path}"`);
+    const code = path.slice(1);
+    return { code, slug: path === '/' ? '' : path.toLowerCase(), path, isDefault: path === '/' };
+  });
+
+  const seen = new Set();
+  for (const variant of variants) {
+    if (seen.has(variant.slug)) throw new Error(`${context}: duplicate instance variant "${variant.path}"`);
+    seen.add(variant.slug);
+  }
+  return { variants };
+};
+
+/**
+ * @method dispatchBuildInstanceEnv
+ * @description Applies an optional deploy-specific env builder to a canonical
+ * env object. Generic topology code never knows project env key names; callers
+ * register builders by deploy id. The runner-owned container id is applied last.
+ * @param {object} options - Dispatch context.
+ * @param {string} options.deployId - Deployment id used to select a builder.
+ * @param {object} options.instance - Expanded instance descriptor.
+ * @param {string} options.environment - development or production.
+ * @param {Object<string,string>} options.baseEnv - Parsed canonical env file.
+ * @param {string} options.containerDeployId - Runner-derived deployment id.
+ * @param {Object<string,Function>} [options.builders] - Deploy id to env builder registry.
+ * @returns {Object<string,string>} Complete materialized env object.
+ * @memberof ServerConfBuilder
+ */
+const dispatchBuildInstanceEnv = ({
+  deployId,
+  instance,
+  environment,
+  baseEnv = {},
+  containerDeployId,
+  builders = {},
+}) => {
+  const builder = builders[deployId];
+  const env = builder
+    ? builder({ deployId, instance, environment, env: { ...baseEnv } })
+    : { ...baseEnv };
+  if (!env || typeof env !== 'object' || Array.isArray(env))
+    throw new TypeError(`dispatchBuildInstanceEnv: builder for "${deployId}" must return an env object`);
+  return { ...env, CONTAINER_DEPLOY_ID: containerDeployId };
+};
+
+/**
+ * Loads a deploy project's optional instance env builder by convention.
+ * `dd-cyberia` resolves to `src/projects/cyberia/instance-data.js`, whose
+ * public integration export is `buildInstanceEnv`. Missing modules mean the
+ * canonical env is copied unchanged; malformed exports fail explicitly.
+ * @param {string} deployId - Deployment id in `dd-<project>` form.
+ * @returns {Promise<Function|null>} Project env builder, when provided.
+ * @memberof ServerConfBuilder
+ */
+const loadProjectInstanceEnvBuilder = async (deployId) => {
+  const match = /^dd-([a-z0-9][a-z0-9-]*)$/.exec(`${deployId || ''}`);
+  if (!match) return null;
+  const moduleUrl = new URL(`../projects/${match[1]}/instance-data.js`, import.meta.url);
+  if (!fs.existsSync(moduleUrl)) return null;
+  const projectModule = await import(moduleUrl.href);
+  if (projectModule.buildInstanceEnv === undefined) return null;
+  if (typeof projectModule.buildInstanceEnv !== 'function')
+    throw new TypeError(`${moduleUrl.pathname}: buildInstanceEnv must be a function`);
+  return projectModule.buildInstanceEnv;
 };
 
 /**
@@ -1853,67 +1921,48 @@ const resolveInstanceEnvValue = (value, env, tokens) => {
  * A template entry is never deployed as-is once variants exist: each variant
  * produces its own entry whose id, env file path, volume mount and
  * container-status strings are derived by replacing the template id token
- * throughout. The variant whose `slug` is empty keeps the template id verbatim,
- * so pre-existing deployments, PVCs and env directories survive the move to
- * multi-instance untouched.
+ * throughout. The `/` variant keeps the template id verbatim, so pre-existing
+ * deployments, PVCs and env directories survive multi-instance expansion.
  *
- * Nothing here is application-specific: the variant set (`default` + `variants`),
- * which env keys an instance needs (`env`), and prefix-stripping (`stripPathPrefix`)
- * are all declared per entry under `entry.multiInstance`. Env values may use the
- * `{{code}}`, `{{slug}}`, `{{path}}`, `{{id}}` and `{{default}}` placeholders and
- * may be env-scoped objects.
+ * Nothing here is application-specific: variants preserve their public path
+ * through the ingress and the runtime owns that base-path contract.
+ * Project-specific env behavior is delegated through
+ * {@link dispatchBuildInstanceEnv} rather than encoded in topology configuration.
  *
- * Every expanded entry carries three extra fields consumed by the deploy runners:
- * `instanceCode` (the variant this instance serves), `templateId` (so targeting
- * the template id acts on the whole family) and `instanceEnv` (the resolved env
- * keys to write, keyed by environment: `{ development, production }`, so a build
- * in either mode can emit a complete env directory).
+ * Every expanded entry carries normalized metadata consumed by deploy runners:
+ * `instanceCode`, `instanceSlug`, `isDefaultInstance`, and `templateId`.
  *
  * @param {string} deployId - Deployment identifier (e.g. `dd-cyberia`).
  * @returns {Array<object>} Expanded instance entries.
  * @memberof ServerConfBuilder
  */
-const INSTANCE_ENVS = ['development', 'production'];
-
 const loadConfInstances = (deployId) => {
   const expanded = [];
   for (const entry of readConfInstances(deployId)) {
     const spec = entry.multiInstance;
-    const variants = spec?.variants;
-    if (!Array.isArray(variants) || 0 === variants.length) {
-      expanded.push(entry);
+    if (!Array.isArray(spec?.variants) || spec.variants.length === 0) {
+      expanded.push(entry.path ? entry : { ...entry, path: '/' });
       continue;
     }
+    if (Object.hasOwn(spec, 'env'))
+      throw new Error(
+        `loadConfInstances: ${deployId}/${entry.id} uses removed multiInstance.env; ` +
+          'move project-specific env logic to a dispatch env builder',
+      );
+    const topology = normalizeInstanceTopology(spec, `${deployId}/${entry.id}`);
+    const variants = topology.variants;
     for (const variant of variants) {
-      const id = variant.slug ? `${entry.id}-${variant.slug}` : entry.id;
-      const instance = variant.slug ? deepReplaceToken(entry, entry.id, id) : JSON.parse(JSON.stringify(entry));
+      const id = variant.isDefault ? entry.id : `${entry.id}-${variant.slug.slice(1)}`;
+      const instance = variant.isDefault
+        ? JSON.parse(JSON.stringify(entry))
+        : deepReplaceToken(entry, entry.id, id);
       delete instance.multiInstance;
       instance.id = id;
       instance.path = variant.path;
       instance.instanceCode = variant.code;
+      instance.instanceSlug = variant.slug;
+      instance.isDefaultInstance = variant.isDefault;
       instance.templateId = entry.id;
-
-      const tokens = {
-        code: variant.code,
-        slug: variant.slug || '',
-        path: variant.path,
-        id,
-        default: spec.default || '',
-      };
-      // Resolve the declared env keys for both environments so a build in either
-      // mode writes a complete env directory (development.env + production.env).
-      instance.instanceEnv = Object.fromEntries(INSTANCE_ENVS.map((e) => [e, {}]));
-      for (const [key, value] of Object.entries(spec.env || {}))
-        for (const e of INSTANCE_ENVS) {
-          const resolved = resolveInstanceEnvValue(value, e, tokens);
-          if (resolved !== null) instance.instanceEnv[e][key] = resolved;
-        }
-
-      // A backend that serves its routes at the root knows nothing about the
-      // variant prefix — it is selected by env instead. Strip the prefix at the
-      // proxy so the runtime stays instance-agnostic.
-      if (spec.stripPathPrefix && variant.path !== '/')
-        instance.pathRewritePolicy = [{ prefix: variant.path, replacement: '/' }];
       expanded.push(instance);
     }
   }
@@ -2041,7 +2090,7 @@ const instanceProjectPathFactory = (instance) =>
  * destination comes from the same {@link UnderpostGateway.statusPageAssetPathFactory}
  * the HTTPRoute rewrites to, so a variant's page lands where that variant's rule
  * points — `/FOREST/404` at `<host>/FOREST/status-pages/404/index.html`, and the
- * default variant's at `<host>/root/status-pages/404/index.html`.
+ * default variant at `<host>/root/status-pages/404/index.html`.
  * @param {Array<object>} instances - Expanded instance entries.
  * @param {string} [projectPath] - Project root override; omit to derive one per instance.
  * @returns {Array<{host: string, path: string, status: string, assetPath: string, sourcePath: string}>}
@@ -2169,9 +2218,10 @@ const stopPlanFactory = ({
  * @description Reads a deployment's live colour out of the routing text that
  * carries it.
  *
- * Every stack names the backend service `<deployId>-<env>-<colour>-service`, so
- * the colour reads the same way from an HTTPRoute, an HTTPProxy, or the Nginx
- * server block an intercepted host is proxied through. Kept pure and separate
+ * Legacy stacks name the backend Service `<deployId>-<env>-<colour>-service`;
+ * the stable traffic Service names the same value in `spec.selector.app` without
+ * the `-service` suffix. The colour therefore reads the same way during and
+ * after migration. Kept pure and separate
  * from the read so one host's routing text can be matched against several
  * deployments and environments without fetching it again.
  *
@@ -2190,7 +2240,7 @@ const trafficFromRoutingInfoFactory = ({ info = '', deployId = '', env = '' }) =
   if (!`${info}`.trim()) return null;
   if (env) {
     const escaped = `${deployId}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const match = `${info}`.match(new RegExp(`${escaped}-${env}-(blue|green)-service`));
+    const match = `${info}`.match(new RegExp(`${escaped}-${env}-(blue|green)(?:-service)?(?:\\s|$)`));
     return match ? match[1] : null;
   }
   return `${info}`.match('blue') ? 'blue' : `${info}`.match('green') ? 'green' : null;
@@ -2236,6 +2286,66 @@ const deployTrafficEntriesFactory = ({ deployId, env }) => {
         deployment: `${deployId}-${instance.id}-${env}`,
       });
   return entries;
+};
+
+/**
+ * @method hostIngressFactsFactory
+ * @description What the cluster's routing objects say about each hostname: which
+ * kind describes it, whether it is served over TLS, and whether HTTP/3 is on.
+ *
+ * None of the three can be read from the route object alone. The kind is which
+ * object exists; TLS lives on the Gateway's listener (an HTTPRoute never carries
+ * it) or on an HTTPProxy's `virtualhost.tls`; and HTTP/3 is a `ClientTrafficPolicy`
+ * targeting that Gateway. So the answer is a correlation across four kinds, done
+ * once for the whole cluster rather than per row.
+ *
+ * A hostname described by both kinds is a leftover from switching stacks; the
+ * HTTPRoute wins, matching the precedence the shared ingress routes it with.
+ * @param {Array<object>} [httpRoutes] - HTTPRoute items.
+ * @param {Array<object>} [httpProxies] - HTTPProxy items.
+ * @param {Array<object>} [gateways] - Gateway items.
+ * @param {Array<object>} [clientTrafficPolicies] - ClientTrafficPolicy items.
+ * @returns {Object<string,{route: string, tls: boolean, http3: boolean}>} Facts by hostname.
+ * @memberof ServerConfBuilder
+ */
+const hostIngressFactsFactory = ({
+  httpRoutes = [],
+  httpProxies = [],
+  gateways = [],
+  clientTrafficPolicies = [],
+} = {}) => {
+  const tlsGateways = new Set(
+    gateways
+      .filter((gateway) =>
+        (gateway?.spec?.listeners || []).some((listener) => `${listener?.protocol}`.toUpperCase() === 'HTTPS'),
+      )
+      .map((gateway) => gateway?.metadata?.name)
+      .filter(Boolean),
+  );
+  // QUIC only exists where TLS does, so a policy naming a Gateway with no HTTPS
+  // listener describes nothing — the same reason the policy is emitted scoped to
+  // the HTTPS section in the first place.
+  const http3Gateways = new Set(
+    clientTrafficPolicies
+      .filter((policy) => policy?.spec?.http3 !== undefined)
+      .flatMap((policy) => [...(policy?.spec?.targetRefs || []), policy?.spec?.targetRef].filter(Boolean))
+      .map((ref) => ref?.name)
+      .filter((name) => name && tlsGateways.has(name)),
+  );
+
+  const facts = {};
+  for (const proxy of httpProxies) {
+    const host = proxy?.spec?.virtualhost?.fqdn;
+    if (!host) continue;
+    facts[host] = { route: 'HTTPProxy', tls: !!proxy?.spec?.virtualhost?.tls, http3: false };
+  }
+  for (const route of httpRoutes) {
+    const parents = (route?.spec?.parentRefs || []).map((ref) => ref?.name).filter(Boolean);
+    const tls = parents.some((name) => tlsGateways.has(name));
+    const http3 = parents.some((name) => http3Gateways.has(name));
+    for (const host of route?.spec?.hostnames || []) if (host) facts[host] = { route: 'HTTPRoute', tls, http3 };
+  }
+  return facts;
 };
 
 /**
@@ -2404,9 +2514,7 @@ const instanceProxyRoutesFactory = ({ deployId, instances, env, trafficById }) =
       Underpost.deploy.deploymentYamlServiceFactory({
         path: instance.path,
         port: instancePortFactory({ instance, env }),
-        deployId: `${deployId}-${instance.id}`,
-        env,
-        deploymentVersions: [trafficById[instance.id] || 'blue'],
+        serviceId: Underpost.deploy.trafficServiceNameFactory({ deployId: `${deployId}-${instance.id}`, env }),
         pathRewritePolicy: instance.pathRewritePolicy,
       }),
     )
@@ -2418,10 +2526,9 @@ const instanceProxyRoutesFactory = ({ deployId, instances, env, trafficById }) =
  * the workload rule for each instance sub-path, plus the edge-served status page
  * rules declared by that instance's `customStatusPages`.
  *
- * Relative asset loading under a variant sub-path is preserved by carrying the
- * instance `pathRewritePolicy` through verbatim: an instance that declares
- * `stripPathPrefix` gets a ReplacePrefixMatch rewrite, and one that does not
- * keeps its prefix so the workload still sees the URLs the browser requested.
+ * Variant paths are preserved by default, so the selected runtime receives the
+ * same URL that the client requested. An explicit generic `pathRewritePolicy`
+ * is still passed through for unrelated workloads that define one directly.
  * @param {string} deployId - Parent deployment identifier.
  * @param {Array<object>} instances - Expanded instance entries bound to one host.
  * @param {string} env - `development` | `production`.
@@ -2451,8 +2558,8 @@ const instanceHttpRouteRulesFactory = ({ deployId, instances, env, trafficById, 
     // An instance that declares a status page is reached through the shared
     // gateway, which proxies to its workload and intercepts the errors. One that
     // declares none is routed straight there, so the extra hop only exists where
-    // it buys something. `pathRewritePolicy` moves to the gateway with it: the
-    // prefix strip belongs to whoever dials the workload.
+    // it buys something. Any explicit generic `pathRewritePolicy` moves to the
+    // gateway with the workload route.
     const intercepted = Object.keys(instanceInterceptStatusesFactory(instance)).length > 0;
     rules += Underpost.deploy.httpRouteRuleFactory({
       path: instance.path,
@@ -2460,9 +2567,7 @@ const instanceHttpRouteRulesFactory = ({ deployId, instances, env, trafficById, 
         ? { serviceId: UNDERPOST_GATEWAY.serviceName, port: UNDERPOST_GATEWAY.port }
         : {
             port: instancePortFactory({ instance, env }),
-            deployId: `${deployId}-${instance.id}`,
-            env,
-            deploymentVersions: [trafficById[instance.id] || 'blue'],
+            serviceId: Underpost.deploy.trafficServiceNameFactory({ deployId: `${deployId}-${instance.id}`, env }),
             pathRewritePolicy: instance.pathRewritePolicy,
           }),
       altSvc: http3 ? altSvc : undefined,
@@ -2574,7 +2679,9 @@ const waitForPort = async ({
  * @param {Array<string>} hosts - List of hosts to be added to the hosts file.
  * @param {object} options - Options for the hosts file creation.
  * @param {boolean} options.append - Whether to append to the existing hosts file.
- * @returns {object} - Object containing the rendered hosts file.
+ * @param {string} [options.blockId] - Replace an idempotent owned block while preserving unrelated entries.
+ * @param {string} [options.path=/etc/hosts] - Hosts file path; injectable for tests.
+ * @returns {{renderHosts: string, changed: boolean}} Rendered content and whether the file changed.
  * @memberof ServerConfBuilder
  */
 const etcHostFactory = (hosts = [], options = { append: false }) => {
@@ -2594,16 +2701,35 @@ const etcHostFactory = (hosts = [], options = { append: false }) => {
   )} localhost localhost.localdomain localhost4 localhost4.localdomain4
 ::1         localhost localhost.localdomain localhost6 localhost6.localdomain6`;
 
-  if (options && options.append && fs.existsSync(`/etc/hosts`)) {
+  const hostsPath = options?.path || '/etc/hosts';
+  if (options?.blockId) {
+    if (!/^[A-Za-z0-9._-]+$/.test(options.blockId))
+      throw new Error(`Invalid /etc/hosts block id: ${options.blockId}`);
+    const beginMarker = `# underpost hosts ${options.blockId}:begin`;
+    const endMarker = `# underpost hosts ${options.blockId}:end`;
+    const existing = fs.existsSync(hostsPath) ? fs.readFileSync(hostsPath, 'utf8') : '';
+    const begin = existing.indexOf(beginMarker);
+    const end = begin === -1 ? -1 : existing.indexOf(endMarker, begin);
+    let outsideBlock = existing;
+    if (begin !== -1)
+      outsideBlock = `${existing.slice(0, begin)}${end === -1 ? '' : existing.slice(end + endMarker.length)}`;
+    outsideBlock = outsideBlock.trimEnd();
+    const updated = `${outsideBlock}${outsideBlock ? '\n' : ''}${beginMarker}\n${renderHosts}\n${endMarker}\n`;
+    const changed = updated !== existing;
+    if (changed) fs.writeFileSync(hostsPath, updated, 'utf8');
+    return { renderHosts, changed };
+  }
+
+  if (options && options.append && fs.existsSync(hostsPath)) {
     fs.writeFileSync(
-      `/etc/hosts`,
-      fs.readFileSync(`/etc/hosts`, 'utf8') +
+      hostsPath,
+      fs.readFileSync(hostsPath, 'utf8') +
         `
 ${renderHosts}`,
       'utf8',
     );
-  } else fs.writeFileSync(`/etc/hosts`, renderHosts, 'utf8');
-  return { renderHosts };
+  } else fs.writeFileSync(hostsPath, renderHosts, 'utf8');
+  return { renderHosts, changed: true };
 };
 
 /**
@@ -2943,6 +3069,9 @@ export {
   Config,
   loadConf,
   loadConfInstances,
+  normalizeInstanceTopology,
+  dispatchBuildInstanceEnv,
+  loadProjectInstanceEnvBuilder,
   loadInstanceTopology,
   readConfInstances,
   selectConfInstances,
@@ -3003,6 +3132,7 @@ export {
   instanceStatusPageDeployIdFactory,
   instanceStatusPageEntriesFactory,
   deployTrafficEntriesFactory,
+  hostIngressFactsFactory,
   hostRenderInstancesFactory,
   instanceTrafficPlanFactory,
   isTrafficServingFactory,
