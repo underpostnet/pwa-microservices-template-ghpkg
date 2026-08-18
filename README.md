@@ -20,7 +20,7 @@
 
 </div>
 
-#### Base template for pwa/api-rest projects.
+<!-- template-title -->
 
 ## Underpost Platform
 

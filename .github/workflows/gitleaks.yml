@@ -1,0 +1,24 @@
+# Copyright © 2022 Gitleaks LLC - All Rights Reserved.
+# You may use this code under the terms of the GITLEAKS-ACTION END-USER LICENSE AGREEMENT.
+# You should have received a copy of the GITLEAKS-ACTION END-USER LICENSE AGREEMENT with this file.
+# If not, please visit https://gitleaks.io/COMMERCIAL-LICENSE.txt.
+
+name: gitleaks
+on: [workflow_dispatch]
+jobs:
+  scan:
+    name: gitleaks
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GIT_AUTH_TOKEN }}
+          GITHUB_USERNAME: ${{ github.repository_owner }}
+          # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE}}
+          # examples of how to use optional configs:
+          # GITLEAKS_CONFIG: "configs/simple-config.toml"
+          # GITLEAKS_NOTIFY_USER_LIST: "@zricethezav"

@@ -1,0 +1,67 @@
+name: CI | Coverall
+
+on:
+  push:
+    branches: ['master', 'main']
+  pull_request:
+    branches: ['master', 'main']
+
+jobs:
+  test:
+    name: Coverall Test
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      (github.repository == 'underpostnet/engine' ||
+       github.repository == 'underpostnet/pwa-microservices-template' ||
+       github.repository == 'underpostnet/pwa-microservices-template-ghpkg')
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/rockylinux/rockylinux:9
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v7
+
+      - name: Install required packages
+        run: |
+          dnf install -y sudo tar gzip bzip2 git bash
+          dnf install -y curl --allowerasing
+
+      - name: Install Node.js
+        run: |
+          curl -fsSL https://rpm.nodesource.com/setup_24.x | bash -
+          dnf install nodejs -y
+
+      - name: Install project dependencies
+        run: npm install
+
+      - name: Run tests and generate coverage
+        run: scripts/coverall-test.sh
+
+      - name: Upload coverage to Coveralls
+        run: coveralls < ./coverage/lcov.info
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+          COVERALLS_SERVICE_NAME: github
+          COVERALLS_GIT_BRANCH: ${{ github.ref_name }}
+          COVERALLS_FLAG_NAME: core
+
+  finish:
+    needs: test
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      (github.repository == 'underpostnet/engine' ||
+       github.repository == 'underpostnet/pwa-microservices-template' ||
+       github.repository == 'underpostnet/pwa-microservices-template-ghpkg')
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/rockylinux/rockylinux:9
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v7
+
+      - name: Notify Coveralls Finished
+        run: |
+          curl -s -X POST -d 'payload[build_num]=${{ github.run_id }}&payload[status]=done' \
+            "https://coveralls.io/webhook?repo_token=${{ secrets.COVERALLS_REPO_TOKEN }}"
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}

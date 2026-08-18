@@ -1,0 +1,88 @@
+import express from 'express';
+import { registerCrudRoutes } from '../../server/middlewares.js';
+import { userGuard, moderatorGuard } from '../../server/auth.js';
+import { CyberiaInstanceController } from './cyberia-instance.controller.js';
+
+class CyberiaInstanceRouter {
+  /**
+   * @param {import('../types.js').RouterOptions} options
+   * @returns {import('express').Router}
+   */
+  static router(options) {
+    const router = express.Router();
+    // ── Custom actions (must come before generic /:id routes) ──────────────
+    // Boot transport — REST fallback of the gRPC CyberiaDataService, consumed
+    // server-to-server by cyberia-server (ENGINE_API_BASE_URL) when the engine
+    // gRPC server (ENGINE_GRPC_ADDRESS) is not enabled. Unauthenticated for
+    // parity with the internal-network insecure gRPC channel.
+    router.get(`/boot/ping`, async (req, res) => await CyberiaInstanceController.bootPing(req, res, options));
+    router.get(
+      `/boot/object-layers`,
+      async (req, res) => await CyberiaInstanceController.bootObjectLayerBatch(req, res, options),
+    );
+    router.get(
+      `/boot/object-layer-manifest`,
+      async (req, res) => await CyberiaInstanceController.bootObjectLayerManifest(req, res, options),
+    );
+    router.get(
+      `/boot/object-layer/:itemId`,
+      async (req, res) => await CyberiaInstanceController.bootObjectLayer(req, res, options),
+    );
+    router.get(`/boot/map/:mapCode`, async (req, res) => await CyberiaInstanceController.bootMapData(req, res, options));
+    router.get(
+      `/boot/full-instance/:instanceCode`,
+      async (req, res) => await CyberiaInstanceController.bootFullInstance(req, res, options),
+    );
+    router.get(
+      `/boot/full-instance`,
+      async (req, res) => await CyberiaInstanceController.bootFullInstance(req, res, options),
+    );
+    router.get(`/fallback-world`, async (req, res) => await CyberiaInstanceController.fallbackWorld(req, res, options));
+    // Fallback-world default items — volatile, process-local (never persisted).
+    // The read is open (same as /fallback-world); staging them and triggering a
+    // rebuild is elevated privilege, like every other hot-reload path.
+    router.get(
+      `/fallback-world/default-items`,
+      async (req, res) => await CyberiaInstanceController.fallbackDefaultItems(req, res, options),
+    );
+    router.post(
+      `/fallback-world/hot-reload`,
+      options.authMiddleware,
+      moderatorGuard,
+      async (req, res) => await CyberiaInstanceController.fallbackHotReload(req, res, options),
+    );
+    // Instance Map — static topology/presence plus dynamic player capability activity.
+    router.get(
+      `/instance-map/:instanceCode/static`,
+      async (req, res) => await CyberiaInstanceController.instanceMapStatic(req, res, options),
+    );
+    router.get(
+      `/instance-map/:instanceCode/dynamic`,
+      async (req, res) => await CyberiaInstanceController.instanceMapDynamic(req, res, options),
+    );
+    // Cached node-background capture of a fallback-world map (PNG).
+    router.get(
+      `/instance-map/:instanceCode/preview/:mapCode`,
+      async (req, res) => await CyberiaInstanceController.instanceMapPreview(req, res, options),
+    );
+    // Hot reload — engine-cyberia -> cyberia-server control trigger. Elevated
+    // privilege only; the internal API key stays server-side.
+    router.post(
+      `/:id/hot-reload`,
+      options.authMiddleware,
+      moderatorGuard,
+      async (req, res) => await CyberiaInstanceController.hotReload(req, res, options),
+    );
+    router.get(
+      `/:id/portal-connect`,
+      options.authMiddleware,
+      userGuard,
+      async (req, res) => await CyberiaInstanceController.portalConnect(req, res, options),
+    );
+    return registerCrudRoutes(router, CyberiaInstanceController, options);
+  }
+}
+
+const ApiRouter = (options) => CyberiaInstanceRouter.router(options);
+
+export { ApiRouter, CyberiaInstanceRouter };

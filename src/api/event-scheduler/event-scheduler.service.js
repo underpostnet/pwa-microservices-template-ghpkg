@@ -1,0 +1,54 @@
+import { strToDateUTC } from '../../client/components/core/CommonJs.js';
+import { DataBaseProviderService } from '../../db/DataBaseProvider.js';
+import { loggerFactory } from '../../server/logger.js';
+
+const logger = loggerFactory(import.meta);
+
+class EventSchedulerService {
+  static post = async (req, res, options) => {
+    /** @type {import('./event-scheduler.model.js').EventSchedulerModel} */
+    const EventScheduler = DataBaseProviderService.getModel("EventScheduler", options);
+
+    if (req.body.startTime || req.body.endTime) {
+      delete req.body.start;
+      delete req.body.end;
+    } else {
+      req.body.start = strToDateUTC(req.body.start);
+      req.body.end = strToDateUTC(req.body.end);
+    }
+
+    return await new EventScheduler({ ...req.body, creatorUserId: req.auth.user._id }).save();
+  };
+  static get = async (req, res, options) => {
+    /** @type {import('./event-scheduler.model.js').EventSchedulerModel} */
+    const EventScheduler = DataBaseProviderService.getModel("EventScheduler", options);
+    if (req.path.startsWith('/creatorUser')) {
+      return await EventScheduler.find({ creatorUserId: req.params.id ? req.params.id : req.auth.user._id });
+    }
+    if (req.params.id) return await EventScheduler.findById(req.params.id);
+    return await EventScheduler.find();
+  };
+  static put = async (req, res, options) => {
+    /** @type {import('./event-scheduler.model.js').EventSchedulerModel} */
+    const EventScheduler = DataBaseProviderService.getModel("EventScheduler", options);
+
+    if (req.body.startTime || req.body.endTime) {
+      delete req.body.start;
+      delete req.body.end;
+    } else {
+      req.body.start = strToDateUTC(req.body.start);
+      req.body.end = strToDateUTC(req.body.end);
+    }
+
+    await EventScheduler.findByIdAndUpdate(req.params.id, req.body);
+    return await EventScheduler.findOne({ _id: req.params.id });
+  };
+  static delete = async (req, res, options) => {
+    /** @type {import('./event-scheduler.model.js').EventSchedulerModel} */
+    const EventScheduler = DataBaseProviderService.getModel("EventScheduler", options);
+    if (req.params.id) return await EventScheduler.findByIdAndDelete(req.params.id);
+    else return await EventScheduler.deleteMany();
+  };
+}
+
+export { EventSchedulerService };

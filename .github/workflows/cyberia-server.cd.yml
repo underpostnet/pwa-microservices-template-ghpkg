@@ -1,0 +1,35 @@
+name: CD | Cyberia mmo server | remote ssh
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'Job to run (deploy)'
+        required: true
+        type: choice
+        options:
+          - deploy
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  deploy:
+    if: >-
+      github.repository == 'underpostnet/cyberia-server'
+      && github.event.inputs.job == 'deploy'
+    name: Remote SSH deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run remote deploy via SSH
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIV_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          command_timeout: 60m
+          script: |
+            set -e
+            set -o pipefail
+            bash /home/dd/engine/deploy/cyberia-server/deploy.sh

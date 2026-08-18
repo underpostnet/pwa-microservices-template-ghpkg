@@ -1,0 +1,46 @@
+import { DataBaseProviderService } from '../../db/DataBaseProvider.js';
+import { loggerFactory } from '../../server/logger.js';
+import { DataQuery } from '../../server/data-query.js';
+
+const logger = loggerFactory(import.meta);
+
+class CyberiaInstanceConfService {
+  static post = async (req, res, options) => {
+    /** @type {import('./cyberia-instance-conf.model.js').CyberiaInstanceConfModel} */
+    const CyberiaInstanceConf =
+      DataBaseProviderService.getModel("CyberiaInstanceConf", options);
+    return await new CyberiaInstanceConf(req.body).save();
+  };
+  static get = async (req, res, options) => {
+    /** @type {import('./cyberia-instance-conf.model.js').CyberiaInstanceConfModel} */
+    const CyberiaInstanceConf =
+      DataBaseProviderService.getModel("CyberiaInstanceConf", options);
+    if (req.params.id) return await CyberiaInstanceConf.findById(req.params.id);
+
+    // Parse query parameters using DataQuery helper
+    const { query, sort, skip, limit, page } = DataQuery.parse(req.query);
+
+    const [data, total] = await Promise.all([
+      CyberiaInstanceConf.find(query).sort(sort).limit(limit).skip(skip),
+      CyberiaInstanceConf.countDocuments(query),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+    return { data, total, page, totalPages };
+  };
+  static put = async (req, res, options) => {
+    /** @type {import('./cyberia-instance-conf.model.js').CyberiaInstanceConfModel} */
+    const CyberiaInstanceConf =
+      DataBaseProviderService.getModel("CyberiaInstanceConf", options);
+    return await CyberiaInstanceConf.findByIdAndUpdate(req.params.id, req.body);
+  };
+  static delete = async (req, res, options) => {
+    /** @type {import('./cyberia-instance-conf.model.js').CyberiaInstanceConfModel} */
+    const CyberiaInstanceConf =
+      DataBaseProviderService.getModel("CyberiaInstanceConf", options);
+    if (req.params.id) return await CyberiaInstanceConf.findByIdAndDelete(req.params.id);
+    else return await CyberiaInstanceConf.deleteMany();
+  };
+}
+
+export { CyberiaInstanceConfService };

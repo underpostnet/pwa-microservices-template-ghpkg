@@ -1,0 +1,52 @@
+import { Translate } from '../core/Translate.js';
+
+class TranslateCyberiaPortal {
+  static async instance() {
+    Translate.Data['object-layer-engine'] = {
+      en: 'Object Layer Engine',
+      es: 'Object Layer Engine',
+    };
+    Translate.Data['object-layer-engine-management'] = {
+      en: 'Object Layer Management',
+      es: 'Object Layer Management',
+    };
+    Translate.Data['object-layer-engine-viewer'] = {
+      en: 'Object Layer Viewer',
+      es: 'Object Layer Viewer',
+    };
+    Translate.Data['cyberia-map-engine'] = {
+      en: 'Cyberia Map Engine',
+      es: 'Cyberia Map Engine',
+    };
+    Translate.Data['cyberia-instance-engine'] = {
+      en: 'Cyberia Instance Engine',
+      es: 'Cyberia Instance Engine',
+    };
+    Translate.Data['cyberia-action-engine'] = {
+      en: 'Cyberia Action Engine',
+      es: 'Cyberia Action Engine',
+    };
+    Translate.Data['cyberia-entity-engine'] = {
+      en: 'Cyberia Entity Engine',
+      es: 'Cyberia Entity Engine',
+    };
+    Translate.Data['fallback-world-engine'] = {
+      en: 'Fallback World Engine',
+      es: 'Fallback World Engine',
+    };
+    Translate.Data['instance-selection'] = {
+      en: 'Select World',
+      es: 'Seleccionar Mundo',
+    };
+    Translate.Data['reload'] = {
+      en: 'Reload',
+      es: 'Recargar',
+    };
+    Translate.Data['retry'] = {
+      en: 'Retry',
+      es: 'Reintentar',
+    };
+  }
+}
+
+export { TranslateCyberiaPortal };

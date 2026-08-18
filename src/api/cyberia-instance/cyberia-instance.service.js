@@ -1,0 +1,233 @@
+import { DataBaseProviderService } from '../../db/DataBaseProvider.js';
+import { loggerFactory } from '../../server/logger.js';
+import { DataQuery } from '../../server/data-query.js';
+import { connectPortals } from './cyberia-portal-connector.js';
+import {
+  generateFallbackWorld,
+  fallbackListInstance,
+  DEFAULT_FALLBACK_INSTANCE_CODE,
+} from './cyberia-fallback-world.js';
+import { getFallbackDefaultItems, setFallbackDefaultItems } from './cyberia-fallback-default-items.js';
+import { CYBERIA_INSTANCE_CONF_DEFAULTS } from '../cyberia-server-defaults/cyberia-server-defaults.js';
+import { triggerHotReload } from '../../projects/cyberia/hot-reload-trigger.js';
+
+const logger = loggerFactory(import.meta);
+
+class CyberiaInstanceService {
+  static post = async (req, res, options) => {
+    /** @type {import('./cyberia-instance.model.js').CyberiaInstanceModel} */
+    const CyberiaInstance = DataBaseProviderService.getModel('CyberiaInstance', options);
+    const CyberiaInstanceConf = DataBaseProviderService.getModel('CyberiaInstanceConf', options);
+    if (req.auth && req.auth.user) req.body.creator = req.auth.user._id;
+    const instance = await new CyberiaInstance(req.body).save();
+
+    // Auto-upsert a CyberiaInstanceConf for this instance using schema defaults.
+    // $setOnInsert ensures existing conf documents are never overwritten.
+    if (instance.code && CyberiaInstanceConf) {
+      try {
+        const conf = await CyberiaInstanceConf.findOneAndUpdate(
+          { instanceCode: instance.code },
+          { $setOnInsert: { instanceCode: instance.code } },
+          { upsert: true, returnDocument: 'after' },
+        );
+        if (conf && !instance.conf) {
+          await CyberiaInstance.findByIdAndUpdate(instance._id, { conf: conf._id });
+          instance.conf = conf._id;
+        }
+      } catch (e) {
+        logger.error('auto-upsert CyberiaInstanceConf failed:', e);
+      }
+    }
+
+    return instance;
+  };
+  static get = async (req, res, options) => {
+    /** @type {import('./cyberia-instance.model.js').CyberiaInstanceModel} */
+    const CyberiaInstance = DataBaseProviderService.getModel('CyberiaInstance', options);
+    const populateCreator = { path: 'creator', model: 'User', select: '_id username' };
+    if (req.params.id) return await CyberiaInstance.findById(req.params.id).populate(populateCreator);
+
+    // Parse query parameters using DataQuery helper
+    const { query, sort, skip, limit, page } = DataQuery.parse(req.query);
+
+    const [data, total] = await Promise.all([
+      CyberiaInstance.find(query).sort(sort).limit(limit).skip(skip).populate(populateCreator),
+      CyberiaInstance.countDocuments(query),
+    ]);
+
+    // Opt-in (?fallback=true): surface the always-on TEST world so the selection
+    // view is never empty. Skipped when a real TEST instance is already present.
+    const injectFallback =
+      /^(true|1)$/i.test(String(req.query.fallback || '')) &&
+      !data.some((d) => d.code === DEFAULT_FALLBACK_INSTANCE_CODE);
+    const items = injectFallback ? [...data, fallbackListInstance()] : data;
+    const count = injectFallback ? total + 1 : total;
+
+    const totalPages = Math.ceil(count / limit);
+    return { data: items, total: count, page, totalPages };
+  };
+  static put = async (req, res, options) => {
+    /** @type {import('./cyberia-instance.model.js').CyberiaInstanceModel} */
+    const CyberiaInstance = DataBaseProviderService.getModel('CyberiaInstance', options);
+    const instance = await CyberiaInstance.findById(req.params.id);
+    if (!instance) throw new Error('instance not found');
+    if (req.auth.user.role !== 'admin' && String(instance.creator) !== String(req.auth.user._id))
+      throw new Error('insufficient permission');
+    if (req.body.thumbnail && instance.thumbnail && String(req.body.thumbnail) !== String(instance.thumbnail)) {
+      const File = DataBaseProviderService.getModel('File', options);
+      await File.findByIdAndDelete(instance.thumbnail);
+    }
+    return await CyberiaInstance.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
+  };
+  /**
+   * Central portal connector endpoint.
+   *
+   * Delegates topology computation to the pure-function `connectPortals()`
+   * from cyberia-portal-connector.js so the same logic can be used by the
+   * GUI without a DB dependency.
+   *
+   * Builds a minimal ring connecting all maps and assigns random portal
+   * subtypes to remaining portals.  Does NOT generate procedural entities —
+   * entity generation is handled exclusively by the fallback world logic
+   * (cyberia-world-generator.js).
+   *
+   *   ?persist=true  — save generated portals to DB
+   */
+  /**
+   * Ask a running cyberia-server to rebuild its world now (gRPC control
+   * service, REST fallback). Moderator/admin only — the route guards the
+   * caller; the internal CYBERIA_SERVER_API_KEY never leaves the engine.
+   */
+  static hotReload = async (req, res, options) => {
+    const CyberiaInstance = DataBaseProviderService.getModel('CyberiaInstance', options);
+    const { serverUrl, mode } = req.body || {};
+    if (!serverUrl) throw new Error('serverUrl is required');
+
+    // Resolve the instance the component is editing so the target server can
+    // reject a trigger aimed at a different world.
+    let instanceCode = req.body?.instanceCode || '';
+    if (!instanceCode && req.params.id) {
+      const instance = await CyberiaInstance.findById(req.params.id).select('code').lean();
+      instanceCode = instance?.code || '';
+    }
+
+    const { transport, result, grpcError } = await triggerHotReload({ serverUrl, instanceCode, mode });
+    return { transport, instanceCode, grpcError, ...result };
+  };
+
+  static portalConnect = async (req, res, options) => {
+    const CyberiaInstance = DataBaseProviderService.getModel('CyberiaInstance', options);
+    const CyberiaMap = DataBaseProviderService.getModel('CyberiaMap', options);
+
+    const instance = await CyberiaInstance.findById(req.params.id).lean();
+    if (!instance) throw new Error('instance not found');
+
+    const mapCodes = instance.cyberiaMapCodes || [];
+
+    // Load maps with the fields needed by the connector.
+    const mapDocs = await CyberiaMap.find(
+      { code: { $in: mapCodes } },
+      {
+        code: 1,
+        gridX: 1,
+        gridY: 1,
+        entities: 1,
+      },
+    ).lean();
+
+    // ── Portal topology (pure function) ──────────────────────────────────
+    const result = connectPortals(mapCodes, mapDocs);
+
+    // ── Persist to DB when requested ─────────────────────────────────────
+    const persist = req.query?.persist === 'true';
+    if (persist) {
+      await CyberiaInstance.findByIdAndUpdate(req.params.id, { portals: result.portals });
+    }
+
+    return {
+      ...result,
+      persisted: persist,
+    };
+  };
+
+  static delete = async (req, res, options) => {
+    /** @type {import('./cyberia-instance.model.js').CyberiaInstanceModel} */
+    const CyberiaInstance = DataBaseProviderService.getModel('CyberiaInstance', options);
+    if (req.params.id) {
+      const instance = await CyberiaInstance.findById(req.params.id);
+      if (!instance) throw new Error('instance not found');
+      if (req.auth.user.role !== 'admin' && String(instance.creator) !== String(req.auth.user._id))
+        throw new Error('insufficient permission');
+      if (instance.thumbnail) {
+        const File = DataBaseProviderService.getModel('File', options);
+        await File.findByIdAndDelete(instance.thumbnail);
+      }
+      return await CyberiaInstance.findByIdAndDelete(req.params.id);
+    } else return await CyberiaInstance.deleteMany();
+  };
+
+  /**
+   * Return an in-memory procedural fallback world.
+   *
+   * Nothing is persisted to MongoDB.  The world is regenerated on every
+   * call but stays deterministic for a given seed.
+   *
+   * Query params:
+   *   ?mapCount=<number>       — maps to generate  (default: 4)
+   *   ?botCount=<number>       — bots per map      (random 8–16 if omitted)
+   *   ?obstacleCount=<number>  — obstacles per map  (random 12–20 if omitted)
+   *   ?foregroundCount=<number>— foreground per map (random 6–12 if omitted)
+   */
+  static fallbackWorld = async (req) => {
+    const q = req.query || {};
+    return generateFallbackWorld({
+      mapCount: q.mapCount ? parseInt(q.mapCount, 10) : undefined,
+      botCount: q.botCount ? parseInt(q.botCount, 10) : undefined,
+      obstacleCount: q.obstacleCount ? parseInt(q.obstacleCount, 10) : undefined,
+      foregroundCount: q.foregroundCount ? parseInt(q.foregroundCount, 10) : undefined,
+      itemIds: getFallbackDefaultItems(),
+    });
+  };
+
+  /**
+   * Current fallback-world default items — the volatile set the
+   * FallbackWorldEngine view last pushed, or `[]` when the engine is running on
+   * pure code defaults. Lets the view reopen showing what this process serves.
+   *
+   * `entityDefaultItemIds` are the ids the code defaults already ship in an
+   * entity's `defaultObjectLayers`. Selecting one of them and leaving
+   * `defaultPlayerInventory` unchecked REMOVES it (see
+   * applyInstanceDefaultPlayerInventory), so the editor needs to be able to warn
+   * before an operator silently strips the player's starting skin or weapon.
+   */
+  static fallbackDefaultItems = async () => {
+    const entityDefaultItemIds = new Set();
+    for (const entityDefault of CYBERIA_INSTANCE_CONF_DEFAULTS.entityDefaults || []) {
+      for (const layer of entityDefault.defaultObjectLayers || []) {
+        if (layer.itemId) entityDefaultItemIds.add(layer.itemId);
+      }
+    }
+    return { itemIds: getFallbackDefaultItems(), entityDefaultItemIds: [...entityDefaultItemIds].sort() };
+  };
+
+  /**
+   * Stage the fallback world's default items, then ask a running cyberia-server
+   * to rebuild. The items are not persisted (see cyberia-fallback-default-items):
+   * they are staged here first so the rebuild's `getFullInstance` re-fetch picks
+   * them up, which is what makes them reach the server at all.
+   *
+   * `instanceCode` is intentionally left empty — the target world is addressed by
+   * `serverUrl` (origin, or origin + variant sub-path), and naming the synthetic
+   * `fallback` code would be rejected by any server serving a real instance code.
+   */
+  static fallbackHotReload = async (req) => {
+    const { serverUrl, mode, itemIds } = req.body || {};
+    if (!serverUrl) throw new Error('serverUrl is required');
+
+    const staged = setFallbackDefaultItems(itemIds || []);
+    const { transport, result, grpcError } = await triggerHotReload({ serverUrl, instanceCode: '', mode });
+    return { transport, itemIds: staged, grpcError, ...result };
+  };
+}
+
+export { CyberiaInstanceService };

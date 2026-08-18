@@ -1,0 +1,1120 @@
+## Underpost CLI
+
+> underpost ci/cd cli v3.2.90
+
+**Usage:** `underpost [options] [command]`
+
+### Global options
+
+| Option | Description |
+| --- | --- |
+| `-V, --version` | output the version number |
+| `-h, --help` | display help for command |
+
+### Commands
+
+| Command | Description |
+| --- | --- |
+| [`new`](#underpost-new) | Initializes a new Underpost project, service, or configuration. |
+| [`client`](#underpost-client) | Builds client assets, single replicas, and/or syncs environment ports. |
+| [`start`](#underpost-start) | Initiates application servers, build pipelines, or other defined services based on the deployment ID. |
+| [`clone`](#underpost-clone) | Clones a specified GitHub repository into the current directory. |
+| [`pull`](#underpost-pull) | Pulls the latest changes from a specified GitHub repository. |
+| [`cmt`](#underpost-cmt) | Manages commits to a GitHub repository, supporting various commit types and options. |
+| [`push`](#underpost-push) | Pushes committed changes from a local repository to a remote GitHub repository. |
+| [`env`](#underpost-env) | Sets environment variables and configurations related to a specific deployment ID. |
+| [`static`](#underpost-static) | Manages static build of page, bundles, and documentation with comprehensive customization options. |
+| [`config`](#underpost-config) | Manages Underpost configurations using various operators. |
+| [`root`](#underpost-root) | Displays the root path of the npm installation. |
+| [`ip`](#underpost-ip) | Displays the current public machine IP addresses. |
+| [`cluster`](#underpost-cluster) | Manages Kubernetes clusters, defaulting to Kind cluster initialization. |
+| [`deploy`](#underpost-deploy) | Manages application deployments, defaulting to deploying development pods. |
+| [`secret`](#underpost-secret) | Manages secrets for various platforms. |
+| [`image`](#underpost-image) | Manages Docker images, including building, saving, and loading into Kubernetes clusters. |
+| [`install`](#underpost-install) | Quickly imports Underpost npm dependencies by copying them. |
+| [`db`](#underpost-db) | Manages database operations with support for MariaDB and MongoDB, including import/export, multi-pod targeting, and Git integration. |
+| [`metadata`](#underpost-metadata) | Manages cluster metadata operations, including import and export. |
+| [`cron`](#underpost-cron) | Manages cron jobs: execute jobs directly or generate and apply K8s CronJob manifests. |
+| [`fs`](#underpost-fs) | Manages file storage, defaulting to file upload operations. |
+| [`test`](#underpost-test) | Manages and runs tests, defaulting to the current Underpost default test suite. |
+| [`monitor`](#underpost-monitor) | Manages health server monitoring for specified deployments. |
+| [`ssh`](#underpost-ssh) | Manages SSH credentials and sessions for remote access to cluster nodes or services. |
+| [`run`](#underpost-run) | Runs specified scripts using various runners. |
+| [`docker-compose`](#underpost-docker-compose) | General-purpose Docker Compose development pipeline (mirrors the Kubernetes dev stack). |
+| [`lxd`](#underpost-lxd) | Manages LXD virtual machines as K3s nodes (control plane or workers). |
+| [`baremetal`](#underpost-baremetal) | Manages baremetal server operations, including installation, database setup, commissioning, and user management. |
+| [`release`](#underpost-release) | Release orchestrator for building new versions and deploying releases of the Underpost CLI. |
+
+## Command reference
+
+### underpost new
+
+Initializes a new Underpost project, service, or configuration.
+
+**Usage:** `underpost new [options] [app-name]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `app-name` | The name of the new project. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--deploy-id <deploy-id>` | Create deploy ID conf env files |
+| `--sub-conf <sub-conf>` | Create sub conf env files |
+| `--cluster` | Create deploy ID cluster files and sync to current cluster |
+| `--build-repos` | Create deploy ID repositories |
+| `--build` | Build the deployment to pwa-microservices-template (requires --deploy-id) |
+| `--clean-template` | Clean the build directory (pwa-microservices-template) |
+| `--sync-conf` | Sync configuration to private repositories (requires --deploy-id) |
+| `--sync-start` | Sync start scripts in deploy ID package.json with root package.json (use 'dd' as --deploy-id to sync all dd.router) |
+| `--purge` | Remove deploy ID conf and all related repositories (requires --deploy-id) |
+| `--dev` | Sets the development cli context |
+| `--default-conf` | Create default deploy ID conf env files |
+| `--conf-workflow-id <workflow-id>` | Set custom configuration workflow ID for conf generation |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost client
+
+Builds client assets, single replicas, and/or syncs environment ports.
+
+**Usage:** `underpost client [options] [deploy-id] [sub-conf] [host] [path]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `deploy-id` | The deployment ID to build. (default: "dd-default") |
+| `sub-conf` | The sub-configuration for the build. (default: "") |
+| `host` | Comma-separated hosts to filter the build. (default: "") |
+| `path` | Comma-separated paths to filter the build. (default: "") |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--sync-env-port` | Sync environment port assignments across all deploy IDs |
+| `--single-replica` | Build single replica folders instead of full client |
+| `--build-zip` | Create zip files of the builds |
+| `--split <mb>` | Split generated zip files into parts of the specified size in MB |
+| `--unzip <build-prefix>` | Extract a built client zip or split zip parts using the given build prefix |
+| `--merge-zip <build-prefix>` | Merge split ZIP parts back into a single ZIP file for the given build prefix |
+| `--lite-build` | Skip full build (default is full build) |
+| `--icons-build` | Build icons |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost start
+
+Initiates application servers, build pipelines, or other defined services based on the deployment ID.
+
+**Usage:** `underpost start [options] <deploy-id> [env]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `deploy-id` | The unique identifier for the deployment configuration. |
+| `env` | Optional: The environment to start (e.g., "development", "production"). Defaults to "development". |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--run` | Starts application servers and monitors their health. |
+| `--build` | Triggers the client-side application build process. |
+| `--underpost-quickly-install` | Uses Underpost Quickly Install for dependency installation. |
+| `--skip-pull-base` | Skips cloning repositories, uses current workspace code directly. |
+| `--skip-full-build` | Skips the full client bundle build during deployment. |
+| `--pull-bundle` | Downloads the pre-built client bundle from Cloudinary via pull-bundle before starting. Use together with --skip-full-build to skip the local build entirely. |
+| `--private-test-repo` | During --build, clone the private test source repo (engine-test-<id>) instead of the production engine-<id> repo. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost clone
+
+Clones a specified GitHub repository into the current directory.
+
+**Usage:** `underpost clone [options] <uri>`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `uri` | The URI of the GitHub repository (e.g., "username/repository"). |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--bare` | Performs a bare clone, downloading only the .git files. |
+| `--g8` | Uses the g8 repository extension for cloning. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost pull
+
+Pulls the latest changes from a specified GitHub repository.
+
+**Usage:** `underpost pull [options] <path> <uri>`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `path` | The absolute or relative directory path where the repository is located. |
+| `uri` | The URI of the GitHub repository (e.g., "username/repository"). |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--g8` | Uses the g8 repository extension for pulling. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost cmt
+
+Manages commits to a GitHub repository, supporting various commit types and options.
+
+**Usage:** `underpost cmt [options] [path] [commit-type] [module-tag] [message]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `path` | The absolute or relative directory path of the repository. |
+| `commit-type` | The type of commit to perform. Options: feat, fix, docs, style, refactor, perf, ci, cd, infra, build, test, chore, revert, backup. |
+| `module-tag` | Optional: Sets a specific module tag for the commit. |
+| `message` | Optional: Provides an additional custom message for the commit. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--log [latest-n]` | Shows commit history from the specified number of latest n path commits. |
+| `--last-msg <latest-n>` | Displays the last n commit message. |
+| `--empty` | Allows committing with empty files. |
+| `--copy` | Copies the generated commit message to the clipboard. |
+| `--info` | Displays information about available commit types. |
+| `--diff` | Shows the current git diff changes. |
+| `--edit` | Edit last commit. |
+| `--deploy-id <deploy-id>` | Sets the deployment configuration ID for the commit context. |
+| `--cached` | Commit staged changes only or context. |
+| `--init-repo [origin]` | Initialize a git repository at the specified path. Optionally set the git remote origin URL. |
+| `--hashes <hashes>` | Comma-separated list of specific file hashes of commits. |
+| `--extension <extension>` | specific file extensions of commits. |
+| `--changelog` | Print the plain changelog of the last N commits (see --from-n-commit, default 1). |
+| `--changelog-build` | Builds a CHANGELOG.md file based on the commit history |
+| `--changelog-min-version <version>` | Sets the minimum version limit for --changelog-build (default: 2.85.0) |
+| `--changelog-no-hash` | Excludes commit hashes from the generated changelog entries (used with --changelog-build). |
+| `--changelog-msg` | Print the sanitized, commit-ready changelog message of the last N commits (see --from-n-commit, default 1). Empty when there are no tagged entries. |
+| `--from-n-commit <n>` | Number of latest commits to include in --changelog/--changelog-msg (default: 1). |
+| `--unpush` | With --log, automatically sets range to unpushed commits ahead of remote. |
+| `-b` | Shows the current Git branch name. |
+| `-p [branch]` | Shows the reflog for the specified branch. |
+| `--bc <commit-hash>` | Shows branches that contain the specified commit. |
+| `--is-remote-repo <url-repo>` | Checks whether a remote Git repository URL is reachable. Prints true or false. |
+| `--has-changes` | Prints "1" if there are staged or unstaged git changes in the repository, empty string otherwise. |
+| `--remote-url` | Prints the current git remote URL (origin) in plain text. |
+| `--switch-repo <url>` | Switches the git remote (origin) to <url> and force-pulls the target branch, overwriting the current working tree (discards local commits and tracked changes). Accepts a full URL or "owner/repo". |
+| `--target-branch <branch>` | Target branch for --switch-repo (default: master). |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost push
+
+Pushes committed changes from a local repository to a remote GitHub repository.
+
+**Usage:** `underpost push [options] <path> <uri>`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `path` | The absolute or relative directory path of the repository. |
+| `uri` | The URI of the GitHub repository (e.g., "username/repository"). |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `-f` | Forces the push, overwriting the remote repository history. |
+| `--g8` | Uses the g8 repository extension for pushing. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost env
+
+Sets environment variables and configurations related to a specific deployment ID.
+
+**Usage:** `underpost env [options] [deploy-id] [env] [subConf]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `deploy-id` | The deployment configuration ID. Use 'clean' to restore default environment settings. Use 'root' to load underpost root env. Use 'current' to get plain current deploy Id. |
+| `env` | Optional: The environment to set (e.g., "production", "development"). Defaults to "production". |
+| `subConf` | Optional: The sub configuration to set. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost static
+
+Manages static build of page, bundles, and documentation with comprehensive customization options.
+
+**Usage:** `underpost static [options]`
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--page <ssr-component-path>` | Build custom static pages. |
+| `--title <title>` | Sets a custom title for the static page (deprecated: use --config-file). |
+| `--output-path <output-path>` | Sets the output path for the generated static page. |
+| `--description <description>` | Page description for SEO. |
+| `--keywords <keywords>` | Comma-separated keywords for SEO. |
+| `--author <author>` | Page author. |
+| `--theme-color <color>` | Theme color for mobile browsers. |
+| `--canonical-url <url>` | Canonical URL for SEO. |
+| `--thumbnail <url>` | Open Graph thumbnail image URL. |
+| `--locale <locale>` | Page locale (default: en-US). |
+| `--site-name <name>` | Site name for Open Graph. |
+| `--head-scripts <paths>` | Comma-separated paths to scripts for head section. |
+| `--body-scripts <paths>` | Comma-separated paths to scripts for body section. |
+| `--styles <paths>` | Comma-separated paths to stylesheets. |
+| `--favicon <path>` | Favicon path. |
+| `--apple-touch-icon <path>` | Apple touch icon path. |
+| `--manifest <path>` | Web manifest path. |
+| `--head-components <paths>` | Comma-separated SSR head component paths. |
+| `--body-components <paths>` | Comma-separated SSR body component paths. |
+| `--build-path <build-path>` | Sets a custom build path for static documents or assets. |
+| `--env <env>` | Sets the environment for the static build (e.g., "development", "production"). |
+| `--minify` | Minify HTML output (default: true for production). |
+| `--no-minify` | Disable HTML minification. |
+| `--config-file <path>` | Path to JSON configuration file. |
+| `--generate-config [path]` | Generate a template configuration file. |
+| `--lang <lang>` | HTML lang attribute (default: en). |
+| `--dir <dir>` | HTML dir attribute (default: ltr). |
+| `--dev` | Sets the development cli context |
+| `--run-sv [port]` | Start a standalone Express static server to preview the static build (default port: 5000). |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost config
+
+Manages Underpost configurations using various operators.
+
+**Usage:** `underpost config [options] <operator> [key] [value]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `operator` | The configuration operation to perform. Options: set, delete, get, list, clean, isInsideContainer. |
+| `key` | Optional: The specific configuration key to manage. |
+| `value` | Optional: The value to set for the configuration key. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--plain` | Prints the configuration value in plain text. |
+| `--filter <keyword>` | Filters the list by matching key or value (only for list operation). |
+| `--deploy-id <deploy-id>` | Sets the deployment configuration ID for the operation context. |
+| `--build` | Sets the build context for the operation. |
+| `--copy` | Copies the configuration value to the clipboard (only for get operation). |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost root
+
+Displays the root path of the npm installation.
+
+**Usage:** `underpost root [options]`
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost ip
+
+Displays the current public machine IP addresses.
+
+**Usage:** `underpost ip [options] [ips]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `ips` | Optional args comma-separated list of IP to process. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--dhcp` | Fetches and displays the current Dynamic Host Configuration Protocol server IP address. |
+| `--copy` | Copies the IP addresses to the clipboard. |
+| `--ban-ingress-add` | Adds IP addresses to banned ingress list. |
+| `--ban-ingress-remove` | Removes IP addresses from banned ingress list. |
+| `--ban-ingress-list` | Lists all banned ingress IP addresses. |
+| `--ban-ingress-clear` | Clears all banned ingress IP addresses. |
+| `--ban-egress-add` | Adds IP addresses to banned egress list. |
+| `--ban-egress-remove` | Removes IP addresses from banned egress list. |
+| `--ban-egress-list` | Lists all banned egress IP addresses. |
+| `--ban-egress-clear` | Clears all banned egress IP addresses. |
+| `--ban-both-add` | Adds IP addresses to both banned ingress and egress lists. |
+| `--ban-both-remove` | Removes IP addresses from both banned ingress and egress lists. |
+| `--mac` | Prints the MAC address of the main network interface. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost cluster
+
+Manages Kubernetes clusters, defaulting to Kind cluster initialization.
+
+**Usage:** `underpost cluster [options] [pod-name]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `pod-name` | Optional: Filters information by a specific pod name. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--reset` | Deletes all clusters and prunes all related data and caches. |
+| `--reset-mongodb` | Performs a hard cleanup of only MongoDB-related resources (StatefulSet, PVCs/PVs, Secrets, ConfigMaps, caches) without restarting the whole node. Combined with --mongodb it instead wipes the retained hostPath volumes as part of that deploy, so the replica set starts from empty data. |
+| `--mariadb` | Initializes the cluster with a MariaDB statefulset. |
+| `--mysql` | Initializes the cluster with a MySQL statefulset. |
+| `--mongodb` | Initializes the cluster with a MongoDB statefulset. |
+| `--service-host <host>` | Set custom host/IP for exposed MongoDB and Valkey clients. |
+| `--postgresql` | Initializes the cluster with a PostgreSQL statefulset. |
+| `--mongodb4` | Initializes the cluster with a MongoDB 4.4 service. |
+| `--valkey` | Initializes the cluster with a Valkey service. |
+| `--ipfs` | Initializes the cluster with an ipfs-cluster statefulset. |
+| `--contour` | Initializes the cluster with Project Contour base HTTPProxy and Envoy. |
+| `--gateway-api` | Initializes the cluster with the Gateway API control plane (CRDs, Envoy Gateway, GatewayClass) used by generated HTTPRoute + QUIC/HTTP3 manifests. With --dev the data plane binds the listener ports on the host network for direct browser access. |
+| `--gateway-class <name>` | GatewayClass name to provision (default "eg"). |
+| `--ingress-node <node-name>` | Dedicated node for underpost-ingress when both routing stacks coexist. Workload placement flags do not move it. |
+| `--node-port` | Exposes enabled ready services (e.g. MongoDB 4.4, Valkey) to the host/public network via their NodePort Service manifest. |
+| `--node-selector <k8s-node-name>` | Pins the just-deployed StatefulSet (MongoDB 4.4 / Valkey) to the given Kubernetes node once it is ready (via a kubernetes.io/hostname nodeSelector). |
+| `--cert-manager` | Initializes the cluster with a Let's Encrypt production ClusterIssuer. |
+| `--dedicated-gpu` | Initializes the cluster with dedicated GPU base resources and environment settings. |
+| `--ns-use <ns-name>` | Switches the current Kubernetes context to the specified namespace (creates if it doesn't exist). |
+| `--kubeadm` | Initializes the cluster using kubeadm for control plane management. |
+| `--pod-network-cidr <cidr>` | Sets custom pod network CIDR for kubeadm cluster initialization (defaults to "192.168.0.0/16"). |
+| `--control-plane-endpoint <endpoint>` | Sets custom control plane endpoint for kubeadm cluster initialization (defaults to "localhost:6443"). |
+| `--grafana` | Initializes the cluster with a Grafana deployment. |
+| `--prom [hosts]` | Initializes the cluster with a Prometheus Operator deployment and monitor scrap for specified hosts. |
+| `--dev` | Initializes a development-specific cluster configuration. |
+| `--list-pods` | Displays detailed information about all pods. |
+| `--pull-image` | Sets an optional associated image to pull during initialization. |
+| `--init-host` | Installs necessary Kubernetes node CLI tools (e.g., kind, kubeadm, docker, podman, helm). |
+| `--uninstall-host` | Uninstalls all host components installed by init-host. |
+| `--config` | Sets the base Kubernetes node configuration. |
+| `--chown` | Sets the appropriate ownership for Kubernetes kubeconfig files. |
+| `--k3s` | Initializes the cluster using K3s (Lightweight Kubernetes). |
+| `--hosts <hosts>` | A comma-separated list of cluster hostnames or IP addresses. |
+| `--remove-volume-host-paths` | Removes specified volume host paths after execution. |
+| `--reset-mode <mode>` | Reset mode for --reset --k3s: "drain" (stop services, keep K3s installed) or "full" (uninstall + cleanup). Default: "full". |
+| `--namespace <namespace>` | Kubernetes namespace for cluster operations (defaults to "default"). |
+| `--replicas <replicas>` | Sets a custom number of replicas for statefulset deployments. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost deploy
+
+Manages application deployments, defaulting to deploying development pods.
+
+**Usage:** `underpost deploy [options] [deploy-list] [env]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `deploy-list` | A comma-separated list of deployment IDs (e.g., "default-a,default-b"). |
+| `env` | Optional: The environment for deployment (e.g., "development", "production"). Defaults to "development". |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--remove` | Deletes specified deployments and their associated services. |
+| `--sync` | Synchronizes deployment environment variables, ports, and replica counts. |
+| `--info-router` | Displays the current router structure and configuration. |
+| `--cert` | Resets TLS/SSL certificate secrets for deployments. |
+| `--cert-hosts <hosts>` | Resets TLS/SSL certificate secrets for specified hosts. |
+| `--self-signed` | Use a pre-created self-signed TLS secret (kubernetes.io/tls) instead of cert-manager. The secret must already exist in the namespace with the same name as the host. Enables TLS in the Contour HTTPProxy virtualhost without requiring a production ClusterIssuer. |
+| `--node <node>` | Sets optional node for deployment operations. |
+| `--ingress-node <node-name>` | Explicitly relocates the shared host-network ingress; ordinary --node placement never moves it. |
+| `--ssh-key-path <path>` | Private key path for node SSH operations. Currently used when shipping a hostPath volume to a remote target node over SSH. Defaults to engine-private/deploy/id_rsa. |
+| `--build-manifest` | Builds Kubernetes YAML manifests, including deployments, services, proxies, and secrets. |
+| `--sync-static` | Places the SSR status pages and intercepted contexts in the gateway static utility tree, so the edge serves them instead of the application pods. Prefers the running workload and falls back to this checkout, so it can seed the tree before the deployment exists and refresh it once the deployment is Ready. |
+| `--replicas <replicas>` | Sets a custom number of replicas for deployments. |
+| `--image <image>` | Sets a custom image for deployments. |
+| `--versions <deployment-versions>` | A comma-separated list of custom deployment versions. |
+| `--traffic <traffic-versions>` | A comma-separated list of custom deployment traffic weights. |
+| `--timeout-response <duration>` | Sets HTTPProxy per-route response timeout (e.g., "1s", "300ms", "infinity"). |
+| `--timeout-idle <duration>` | Sets HTTPProxy per-route idle timeout (e.g., "10s", "infinity"). |
+| `--retry-count <count>` | Sets HTTPProxy per-route retry count (e.g., 3). |
+| `--retry-per-try-timeout <duration>` | Sets HTTPProxy retry per-try timeout (e.g., "150ms"). |
+| `--disable-update-deployment` | Disables updates to deployments. |
+| `--disable-runtime-probes` | Deprecated compatibility flag; readiness probes remain mandatory. Use --tcp-probes for legacy workloads. |
+| `--tcp-probes` | Generates legacy TCP socket probes instead of HTTP internal-status probes (migration). |
+| `--disable-update-proxy` | Disables updates to proxies. |
+| `--disable-deployment-proxy` | Disables proxies of deployments. |
+| `--gateway-api` | Routes through the Gateway API stack (Gateway + HTTPRoute) instead of the Contour HTTPProxy. Both manifest sets are always generated; this selects which one is applied. |
+| `--gateway-class <name>` | GatewayClass name for generated Gateway manifests (default "eg"). |
+| `--disable-http3` | Omits the QUIC/HTTP3 listener config and the Alt-Svc advertisement from Gateway API manifests. |
+| `--quic-port <port>` | UDP port advertised for QUIC/HTTP3 in generated Gateway API manifests (default 443). |
+| `--disable-update-volume` | Disables updates to volume mounts during deployment. |
+| `--kubeadm` | Enables the kubeadm context for deployment operations. |
+| `--k3s` | Enables the k3s context for deployment operations. |
+| `--kind` | Enables the kind context for deployment operations. |
+| `--git-clean` | Runs git clean on volume mount paths before copying. |
+| `--disable-update-underpost-config` | Disables updates to Underpost configuration during deployment. |
+| `--namespace <namespace>` | Kubernetes namespace for deployment operations (defaults to "default"). |
+| `--cmd <cmd>` | Custom initialization command for deployment (comma-separated commands). |
+| `--skip-full-build` | Skip client bundle rebuild; container will pull pre-built bundle via pull-bundle instead. |
+| `--pull-bundle` | Explicitly pull the pre-built client bundle from Cloudinary inside the container. Use together with --skip-full-build. |
+| `--image-pull-policy <policy>` | Override container imagePullPolicy in the generated deployment manifest (Always, IfNotPresent, Never). Defaults to Never for localhost/ images and IfNotPresent otherwise. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost secret
+
+Manages secrets for various platforms.
+
+**Usage:** `underpost secret [options] [platform]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `platform` | The secret management platform. Options: underpost, sops, sanitizeSecretEnvFile, globalSecretClean. Defaults to "sops". (default: "sops") |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--init` | Initializes the secrets platform environment. |
+| `--create-from-file <path-env-file>` | Creates secrets from a specified environment file. |
+| `--create-from-env` | Creates secrets from container environment variables (envFrom: secretRef). |
+| `--global-clean` | Removes all filesystem traces of secrets (engine-private, .env, conf cache). |
+| `--list` | Lists all available secrets for the platform. |
+| `--encrypt <plaintext-path>` | Encrypts a plaintext Secret manifest into the Git-tracked SOPS store and shreds the source (sops platform). |
+| `--apply` | Decrypts stored SOPS manifests and streams them into kubectl apply, without writing plaintext to disk (sops platform). |
+| `--namespace <namespace>` | Kubernetes namespace for secret operations (defaults to "default"). |
+| `--install-tools` | Installs the sops and age host binaries only, without running a full cluster host initialization. |
+| `--rotate` | Re-keys every stored SOPS manifest onto --recipient. Secret values are unchanged, so no workload restart is needed. |
+| `--recipient <age-public-key>` | Incoming Age public recipient for --rotate. |
+| `--prune-recipients` | With --rotate, makes --recipient the only recipient, revoking every previous key (use after a key compromise). Requires --force, and revokes CI/CD keys too unless they are named in --keep-recipients. |
+| `--keep-recipients <age-public-keys>` | Comma-separated recipients to retain while --prune-recipients revokes the rest (e.g. the CI/CD key). |
+| `--purge <secret-name>` | Emergency removal: deletes the live Kubernetes Secret and takes its encrypted manifest out of the store. |
+| `--force` | Confirms the irreversible variant: deletes the manifest instead of archiving it (--purge), revokes recipients (--rotate --prune-recipients), or replaces an existing manifest (--encrypt). |
+| `--dry-run` | Reports what --apply, --rotate, or --purge would do without changing anything. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost image
+
+Manages Docker images, including building, saving, and loading into Kubernetes clusters.
+
+**Usage:** `underpost image [options]`
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--build` | Builds a Docker image using Podman, optionally saves it as a tar archive, and loads it into a specified Kubernetes cluster (Kind, Kubeadm, or K3s). |
+| `--ls` | Lists all available Underpost Dockerfile images. |
+| `--rm <image-id>` | Removes specified Underpost Dockerfile images. |
+| `--path [path]` | The path to the Dockerfile directory. |
+| `--image-name [image-name]` | Sets a custom name for the Docker image. |
+| `--image-out-path [image-out-path]` | Sets the output path for the tar image archive. |
+| `--dockerfile-name [dockerfile-name]` | Sets a custom name for the Dockerfile. |
+| `--podman-save` | Exports the built image as a tar file using Podman. |
+| `--pull-base` | Pulls the base image prerequisites (rockylinux:9) on the host; combine with --build. |
+| `--spec` | Get current cached list of container images used by all pods |
+| `--namespace <namespace>` | Kubernetes namespace for image operations (defaults to "default"). |
+| `--kind` | Set kind cluster env image context management. |
+| `--kubeadm` | Set kubeadm cluster env image context management. |
+| `--k3s` | Set k3s cluster env image context management. |
+| `--docker-compose` | Load the built image tar into the local Docker store for Docker Compose availability. |
+| `--node-name` | Set node name for kubeadm or k3s cluster env image context management. |
+| `--reset` | Performs a build without using the cache. |
+| `--dev` | Use development mode. |
+| `--pull-dockerhub <dockerhub-image>` | Sets a custom Docker Hub image for base image pulls. |
+| `--import-tar <tar-path>` | Load a pre-built image tar archive (e.g. ./image-v1.0.0.tar) into the enabled target(s) without building. Combine with --kind, --kubeadm, --k3s and/or --docker-compose; the archive is loaded into each enabled one. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost install
+
+Quickly imports Underpost npm dependencies by copying them.
+
+**Usage:** `underpost install [options]`
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost db
+
+Manages database operations with support for MariaDB and MongoDB, including import/export, multi-pod targeting, and Git integration.
+
+**Usage:** `underpost db [options] [deploy-list]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `deploy-list` | A comma-separated list of deployment IDs (e.g., "default-a,default-b"). |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--import` | Imports container backups from specified repositories. |
+| `--export` | Exports container backups to specified repositories. |
+| `--pod-name <pod-name>` | Comma-separated list of pod names or patterns (supports wildcards like "mariadb-*"). |
+| `--all-pods` | Target all matching pods instead of just the first one. |
+| `--primary-pod` | Automatically detect and use MongoDB primary pod (MongoDB only). |
+| `--primary-pod-ensure <pod-name>` | Ensure setup of MongoDB replica set primary pod before operations. |
+| `--stats` | Display database statistics (collection/table names with document/row counts). |
+| `--collections <collections>` | Comma-separated list of database collections to operate on. |
+| `--out-path <out-path>` | Specifies a custom output path for backups. |
+| `--drop` | Drops the specified databases or collections before importing. |
+| `--preserveUUID` | Preserves UUIDs during database import operations. |
+| `--git` | Enables Git integration for backup version control (clone, pull, commit, push to GitHub). |
+| `--force-clone` | Forces cloning of the Git repository, overwriting local changes. |
+| `--hosts <hosts>` | Comma-separated list of database hosts to filter operations. |
+| `--paths <paths>` | Comma-separated list of paths to filter database operations. |
+| `--ns <ns-name>` | Kubernetes namespace context for database operations (defaults to "default"). |
+| `--macro-rollback-export <n-commits-reset>` | Exports a macro rollback script that reverts the last n commits (Git integration required). |
+| `--clean-fs-collection` | Cleans orphaned File documents from collections that are not referenced by any models. |
+| `--clean-fs-dry-run` | Dry run mode - shows what would be deleted without actually deleting (use with --clean-fs-collection). |
+| `--dev` | Sets the development cli context |
+| `--kubeadm` | Enables the kubeadm context for database operations. |
+| `--kind` | Enables the kind context for database operations. |
+| `--k3s` | Enables the k3s context for database operations. |
+| `--repo-backup` | Backs up repositories (git commit+push) inside deployment pods via kubectl exec. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost metadata
+
+Manages cluster metadata operations, including import and export.
+
+**Usage:** `underpost metadata [options] [deploy-id] [host] [path]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `deploy-id` | The deployment ID to manage metadata. |
+| `host` | The host to manage metadata. |
+| `path` | The path to manage metadata. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--import` | Imports from local storage. |
+| `--export` | Exports to local storage. |
+| `--crons` | Apply to cron data collection |
+| `--instances` | Apply to instance data collection |
+| `--generate` | Generate cluster metadata |
+| `--itc` | Apply under container execution context |
+| `--dev` | Sets the development cli context |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost cron
+
+Manages cron jobs: execute jobs directly or generate and apply K8s CronJob manifests.
+
+**Usage:** `underpost cron [options] [deploy-list] [job-list]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `deploy-list` | A comma-separated list of deployment IDs (e.g., "default-a,default-b"). |
+| `job-list` | A comma-separated list of job IDs. Options: dns,backup. Defaults to all available jobs. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--generate-k8s-cronjobs` | Generates Kubernetes CronJob YAML manifests from cron configuration. |
+| `--apply` | Applies generated K8s CronJob manifests to the cluster via kubectl. |
+| `--setup-start [deploy-id]` | Updates deploy-id package.json start script and generates+applies its K8s CronJob manifests. |
+| `--namespace <namespace>` | Kubernetes namespace for the CronJob resources (default: "default"). |
+| `--image <image>` | Custom container image for the CronJob pods. |
+| `--git` | Pass --git flag to cron job execution. |
+| `--cmd <cmd>` | Optional pre-script commands to run before cron execution. |
+| `--dev` | Use local ./ base path instead of global underpost installation. |
+| `--k3s` | Use k3s cluster context (apply directly on host). |
+| `--kind` | Use kind cluster context (apply via kind-worker container). |
+| `--kubeadm` | Use kubeadm cluster context (apply directly on host). |
+| `--dry-run` | Preview cron jobs without executing them. |
+| `--create-job-now` | After applying manifests, immediately create a Job from each CronJob (requires --apply). |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost fs
+
+Manages file storage, defaulting to file upload operations.
+
+**Usage:** `underpost fs [options] [path]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `path` | The absolute or relative directory path for file operations. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--rm` | Removes the specified file. |
+| `--git` | Displays current Git changes related to file storage. |
+| `--recursive` | Uploads files recursively from the specified path. |
+| `--deploy-id <deploy-id>` | Specifies the deployment configuration ID for file operations. |
+| `--pull` | Downloads the specified file. |
+| `--omit-unzip` | With --pull, keeps the downloaded .zip file and skips extraction. |
+| `--force` | Forces the action, overriding any warnings or conflicts. |
+| `--storage-file-path <storage-file-path>` | Specifies a custom file storage path. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost test
+
+Manages and runs tests, defaulting to the current Underpost default test suite.
+
+**Usage:** `underpost test [options] [deploy-list]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `deploy-list` | A comma-separated list of deployment IDs (e.g., "default-a,default-b"). |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--itc` | Executes tests within the container execution context. |
+| `--sh` | Copies the container entrypoint shell command to the clipboard. |
+| `--logs` | Displays container logs for test debugging. |
+| `--pod-name <pod-name>` | Optional: Specifies the pod name for test execution. |
+| `--pod-status <pod-status>` | Optional: Filters tests by pod status. |
+| `--kind-type <kind-type>` | Optional: Specifies the Kind cluster type for tests. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost monitor
+
+Manages health server monitoring for specified deployments.
+
+**Usage:** `underpost monitor [options] <deploy-id> [env]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `deploy-id` | The deployment configuration ID to monitor. |
+| `env` | Optional: The environment to monitor (e.g., "development", "production"). Defaults to "development". |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--ms-interval <ms-interval>` | Sets a custom millisecond interval for monitoring checks. |
+| `--now` | Executes the monitor script immediately. |
+| `--single` | Disables recurrence, running the monitor script only once. |
+| `--replicas <replicas>` | Sets a custom number of replicas for monitoring. Defaults to 1. |
+| `--type <type>` | Sets a custom monitor type. |
+| `--sync` | Synchronizes with current proxy deployments and traffic configurations. |
+| `--namespace <namespace>` | Sets the Kubernetes namespace for the deployment. Defaults to "default". |
+| `--timeout-response <duration>` | Sets HTTPProxy per-route response timeout (e.g., "5s"). |
+| `--timeout-idle <duration>` | Sets HTTPProxy per-route idle timeout (e.g., "10s", "infinity"). |
+| `--retry-count <count>` | Sets HTTPProxy per-route retry count (e.g., 3). |
+| `--retry-per-try-timeout <duration>` | Sets HTTPProxy retry per-try timeout (e.g., "150ms"). |
+| `--disable-private-conf-update` | Disables updates to private configuration during execution. |
+| `--versions <deployment-versions>` | Specifies the deployment versions to monitor. eg. "blue,green", "green" |
+| `--ready-deployment` | Run in ready deployment monitor mode. |
+| `--promote` | Promotes the deployment after monitoring. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost ssh
+
+Manages SSH credentials and sessions for remote access to cluster nodes or services.
+
+**Usage:** `underpost ssh [options]`
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--deploy-id <deploy-id>` | Sets deploy id context for ssh operations. |
+| `--generate` | Generates new ssh credential and stores it in current private keys file storage. |
+| `--user <user>` | Sets custom ssh user |
+| `--password <password>` | Sets custom ssh password |
+| `--host <host>` | Sets custom ssh host |
+| `--port <port>` | Sets custom ssh port |
+| `--filter <filter>` | Filters ssh user credentials from current private keys file storage. |
+| `--groups <groups>` | Sets comma-separated ssh user groups for the ssh user credential. |
+| `--user-add` | Adds a new ssh user credential to current private keys file storage. |
+| `--user-remove` | Removes an existing ssh user credential from current private keys file storage. |
+| `--user-ls` | Lists all ssh user credentials from current private keys file storage. |
+| `--start` | Starts an SSH session with the specified credentials. |
+| `--reset` | Resets ssh configuration and deletes all stored credentials. |
+| `--keys-list` | Lists all ssh keys from current private keys file storage. |
+| `--hosts-list` | Lists all ssh hosts from current private keys file storage. |
+| `--disable-password` | Disables password authentication for the SSH session. |
+| `--key-test` | Tests the SSH key using ssh-keygen. |
+| `--stop` | Stops the SSH service. |
+| `--status` | Checks the status of the SSH service. |
+| `--connect-uri` | Displays the connection URI. |
+| `--copy` | Copies the connection URI to clipboard. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost run
+
+Runs specified scripts using various runners.
+
+**Usage:** `underpost run [options] <runner-id> [path]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `runner-id` | The runner ID to run. Options: status,expose,dev-cluster,metadata,ipfs-expose,svc-ls,svc-rm,node-move,dev-hosts-expose,dev-hosts-restore,cluster-build,template-deploy,template-deploy-local,docker-image,clean,pull,release-deploy,ssh-deploy,ide,crypto-policy,sync,stop,tz,get-traffic,restore-mongo,ingress-refresh,instance-promote,instance,deploy-key,instance-build-manifest,ls-deployments,host-update,install-crio,dd-container,ip-info,db-client,git-conf,promote,metrics,cluster,gateway-status,deploy,disk-clean,disk-devices,disk-usage,dev,service,etc-hosts,sh,log,ps,pid-info,background,ports,deploy-test,tf-vae-test,spark-template,pull-rocky-image,rmi,kill,generate-pass,sops-setup,sops-status,secret,underpost-config,gpu-env,tf-gpu-test,deploy-job,push-bundle,pull-bundle,build-cluster-deployment-manifests,monitor-ui,shared-dir,shared-dir-add-user. |
+| `path` | The input value, identifier, or path for the operation. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--cmd <command-list>` | Comma-separated list of commands to execute. |
+| `--args <args-array>` | Array of arguments to pass to the command. |
+| `--dev` | Sets the development context environment for the script. |
+| `--build` | Set builder context runner |
+| `--replicas <replicas>` | Sets a custom number of replicas for deployment. |
+| `--pod-name <pod-name>` | Optional: Specifies the pod name for execution. |
+| `--node-name <node-name>` | Optional: Specifies the node name for execution. |
+| `--ingress-node <node-name>` | Dedicated node for the host-network underpost-ingress listener. Workload --node-name never relocates it. |
+| `--ssh-key-path <path>` | Optional: Private key path for node SSH operations, forwarded to volume shipping over SSH. Defaults to engine-private/deploy/id_rsa. |
+| `--port <port>` | Optional: Specifies the port for execution. |
+| `--expose-container-ports <ports>` | Comma-separated Service/container ports; multiple matched resources consume values by resource index. |
+| `--expose-host-ports <ports>` | Comma-separated host ports paired with container ports by resource/port index. |
+| `--local-proxy` | Starts the development path proxy after the expose runner creates its port-forwards. |
+| `--etc-hosts` | Enables etc-hosts context for the runner execution. |
+| `--volume-host-path <volume-host-path>` | Optional: Specifies the volume host path for test execution. |
+| `--volume-mount-path <volume-mount-path>` | Optional: Specifies the volume mount path for test execution. |
+| `--volume-type <volume-type>` | Optional: Specifies the volume type for test execution. |
+| `--image-name <image-name>` | Optional: Specifies the image name for test execution. |
+| `--container-name <container-name>` | Optional: Specifies the container name for test execution. |
+| `--namespace <namespace>` | Optional: Specifies the namespace for test execution. |
+| `--tty` | Enables TTY for the container in deploy-job. |
+| `--stdin` | Keeps STDIN open for the container in deploy-job. |
+| `--restart-policy <policy>` | Sets the restart policy for the job in deploy-job. |
+| `--runtime-class-name <name>` | Sets the runtime class name for the job in deploy-job. |
+| `--image-pull-policy <policy>` | Sets the image pull policy for the job in deploy-job. |
+| `--api-version <version>` | Sets the API version for the job manifest in deploy-job. |
+| `--labels <labels>` | Optional: Specifies a comma-separated list of key-value pairs for labels (e.g., "app=my-app,env=prod"). |
+| `--claim-name <name>` | Optional: Specifies the claim name for volume mounting in deploy-job. |
+| `--kind-type <kind-type>` | Specifies the kind of Kubernetes resource (e.g., Job, Deployment) for deploy-job. |
+| `--force` | Forces operation, overriding any warnings or conflicts. |
+| `--tls` | Enables TLS for the runner execution. |
+| `--reset` | Resets the runner state before execution. |
+| `--dev-proxy-port-offset <port-offset>` | Sets a custom port offset for development proxy. |
+| `--host-network` | Enables host network mode for the runner execution. |
+| `--requests-memory <requests-memory>` | Requests memory limit for the runner execution. |
+| `--requests-cpu <requests-cpu>` | Requests CPU limit for the runner execution. |
+| `--limits-memory <limits-memory>` | Sets memory limit for the runner execution. |
+| `--limits-cpu <limits-cpu>` | Sets CPU limit for the runner execution. |
+| `--resource-template-id <resource-template-id >` | Specifies a resource template ID for the runner execution. |
+| `--expose` | Enables exposure-only behavior in compatible runners; the expose runner itself does not require this flag. |
+| `--conf-server-path <conf-server-path>` | Sets a custom configuration server path. |
+| `--underpost-root <underpost-root>` | Sets a custom Underpost root path. |
+| `--cmd-cron-jobs <cmd-cron-jobs>` | Pre-script commands to run before cron job execution. |
+| `--deploy-id-cron-jobs <deploy-id-cron-jobs>` | Specifies deployment IDs to synchronize cron jobs with during execution. |
+| `--timezone <timezone>` | Sets the timezone for the runner execution. |
+| `--kubeadm` | Sets the kubeadm cluster context for the runner execution. |
+| `--k3s` | Sets the k3s cluster context for the runner execution. |
+| `--kind` | Sets the kind cluster context for the runner execution. |
+| `--traffic <traffic>` | Blue/green traffic colour to bake into generated manifests (default: blue). `stop` accepts a comma list, e.g. blue,green. |
+| `--git-clean` | Runs git clean on volume mount paths before copying. |
+| `--deploy-id <deploy-id>` | Sets deploy id context for the runner execution. |
+| `--user <user>` | Sets user context for the runner execution. |
+| `--hosts <hosts>` | Comma-separated list of hosts for the runner execution. |
+| `--instance-id <instance-id>` | Sets instance id context for the runner execution. |
+| `--pid <process-id>` | Sets process id context for the runner execution. |
+| `--timeout-response <duration>` | Sets HTTPProxy per-route response timeout (e.g., "1s", "300ms", "infinity"). |
+| `--timeout-idle <duration>` | Sets HTTPProxy per-route idle timeout (e.g., "10s", "infinity"). |
+| `--retry-count <count>` | Sets HTTPProxy per-route retry count (e.g., 3). |
+| `--retry-per-try-timeout <duration>` | Sets HTTPProxy retry per-try timeout (e.g., "150ms"). |
+| `--gateway-api` | Routes through the Gateway API stack (Gateway + HTTPRoute) instead of the Contour HTTPProxy. Both manifest sets are always generated; this selects which one is applied. |
+| `--disable-gateway-api` | Falls back to the Contour HTTPProxy stack in runners where the Gateway API is the default (cluster). |
+| `--gateway-class <name>` | GatewayClass name for generated Gateway manifests (default "eg"). |
+| `--disable-http3` | Omits the QUIC/HTTP3 listener config and the Alt-Svc advertisement from Gateway API manifests. |
+| `--quic-port <port>` | UDP port advertised for QUIC/HTTP3 in generated Gateway API manifests (default 443). |
+| `--disable-private-conf-update` | Disables updates to private configuration during execution. |
+| `--logs` | Streams logs during the runner execution. |
+| `--monitor-status <status>` | Sets the status to monitor for pod/resource (default: "Running"). |
+| `--monitor-status-kind-type <kind-type>` | Sets the Kubernetes resource kind type to monitor (default: "pods"). |
+| `--monitor-status-delta-ms <milliseconds>` | Sets the polling interval in milliseconds for status monitoring (default: 1000). |
+| `--monitor-status-max-attempts <attempts>` | Sets the maximum number of status check attempts (default: 600). |
+| `--dry-run` | Preview operations without executing them. |
+| `--from-n-commit <n>` | Number of commits back to use for message propagation in template-deploy (default: 1, last commit only). |
+| `--create-job-now` | After applying cron manifests, immediately create a Job from each CronJob (forwarded to cron runner). |
+| `--host-aliases <host-aliases>` | Adds entries to the Pod /etc/hosts via hostAliases. Format: semicolon-separated entries of "ip=hostname1,hostname2" (e.g., "127.0.0.1=foo.local,bar.local;10.1.2.3=foo.remote,bar.remote"). |
+| `--copy` | Copies the runner output to the clipboard (supported by: generate-pass, template-deploy-local). |
+| `--skip-full-build` | Skip client bundle rebuild; triggers pull-bundle in container startup (supported by: sync, template-deploy). |
+| `--pull-bundle` | Explicitly download the pre-built client bundle from Cloudinary inside the container (supported by: sync, template-deploy). Use together with --skip-full-build. |
+| `--remove` | Remove/teardown resources |
+| `--test` | Enables test/generic-purpose mode for the runner (e.g. use self-signed TLS instead of cert-manager). |
+| `--branch <branch>` | Sets the branch for git operations (default: current branch). |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost docker-compose
+
+General-purpose Docker Compose development pipeline (mirrors the Kubernetes dev stack).
+
+**Usage:** `underpost docker-compose [options] [target]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `target` | Optional service name for --logs, --shell, --restart, or --build. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--install` | Install Docker Engine and the Compose v2 plugin on RHEL/Rocky hosts. |
+| `--reset` | Comprehensive teardown (equivalent to cluster --reset): removes all stack containers, the network, named volumes (destroys data), orphans, and generated artifacts. |
+| `--force` | Force reinstall (--install), remove volumes (--down), or also drop the env-file (--reset). |
+| `--deploy-id <deploy-id>` | Deployment to run as the app container (default: dd-default). 'dd-default' self-bootstraps a fresh engine; any other id runs the standard 'underpost start' command (mirrors src/cli/deploy.js). |
+| `--docker-compose-id <docker-compose-id>` | Selects a canonical custom-workflow stack at engine-private/conf/<deploy-id>/docker-compose/<docker-compose-id>/ (docker-compose.yml + compose.env + nginx.conf, used as-is; nginx/env generation is skipped). e.g. --deploy-id dd-cyberia --docker-compose-id cyberia for the Cyberia MMO ecosystem. |
+| `--env <env>` | Deployment environment for non-default deploy ids (default: development). |
+| `--generate` | Render dynamic supporting files (nginx router config, env-file, app-command override). |
+| `--up` | Start the full stack detached (regenerates config first). |
+| `--down` | Stop and remove containers (and orphans). |
+| `--volumes` | With --down, also remove named volumes (destroys persisted data). |
+| `--restart` | Restart services (optionally a single [target]). |
+| `--build` | With --up rebuild images; alone, rebuilds images with --no-cache. |
+| `--pull` | Pull upstream images for all services. |
+| `--logs` | Follow logs for all services (optionally a single [target]). |
+| `--status` | Show a formatted status table of services. |
+| `--shell` | Open an interactive shell in [target] (default: app). |
+| `--exec <subcommand>` | General-purpose passthrough docker compose subcommand. |
+| `--compose-file <path>` | Path to the compose file (default: docker-compose.yml). |
+| `--env-file <path>` | Path to the compose env-file (default: docker/compose.env). |
+| `--nginx-conf <path>` | Path to the generated nginx config (default: docker/nginx/default.conf). |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost lxd
+
+Manages LXD virtual machines as K3s nodes (control plane or workers).
+
+**Usage:** `underpost lxd [options] [vm-id]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `vm-id` | VM identifier shared by current-VM flags like --vm-create, --vm-delete, --vm-init, --vm-info, and --vm-test. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--init` | Initializes LXD on the current machine via preseed. |
+| `--reset` | Host-safe reset: removes proxy devices, stops/deletes VMs, drops admin-profile and lxdbr0. Does NOT touch the LXD snap or storage pools. |
+| `--purge` | DESTRUCTIVE: gracefully shuts down the LXD daemon (60s timeout), then removes the LXD snap. Combine with --reset to wipe per-VM state first. Safe replacement for the prior aggressive teardown. |
+| `--shutdown` | Pre-host-reboot procedure: gracefully stops every VM and the LXD daemon. Run BEFORE any reboot/poweroff to keep the host bootable. |
+| `--restore` | Symmetric to --shutdown: starts the LXD daemon, waits for it to be responsive, then starts every VM. VMs created via admin-profile have boot.autostart=false, so this is the explicit "bring the lab back up" command. |
+| `--install` | Installs the LXD snap. |
+| `--dev` | Use local paths instead of the global npm installation. |
+| `--create-virtual-network` | Creates the lxdbr0 bridge network. |
+| `--ipv4-address <cidr>` | IPv4 address/CIDR for the lxdbr0 bridge network (default: "10.250.250.1/24"). |
+| `--create-admin-profile` | Creates the admin-profile for VM management. |
+| `--control` | Initialize the target VM as a K3s control plane node. |
+| `--worker` | Initialize the target VM as a K3s worker node. |
+| `--vm-create` | Copy the LXC launch command for the command argument [vm-id] to the clipboard. |
+| `--vm-delete` | SAFELY stop and delete the command argument [vm-id] (removes proxy devices first, then stops, then deletes). Safe to re-run. |
+| `--vm-init` | Bring the command argument [vm-id] up as a K3s node end-to-end: OS base setup, mirror /home/dd/engine into the VM, then K3s role install via the local engine (use with --control or --worker). |
+| `--vm-info` | Display full configuration and status for the command argument [vm-id]. |
+| `--vm-test` | Run connectivity and health checks on the command argument [vm-id]. |
+| `--vm-sync-engine` | Re-copy the host engine source into the command argument [vm-id], overriding whatever is currently there (equivalent to the engine-bootstrap step of --vm-init in isolation). |
+| `--root-size <gb-size>` | Root disk size in GiB for --vm-create (default: 32). |
+| `--join-node <nodes>` | Join a K3s worker to a control plane. Standalone format: "workerName,controlName". When used with --vm-init --worker, provide just the control node name for auto-join. |
+| `--expose <vm-name:ports>` | Proxy host ports to a VM (e.g., "k3s-control:80,443"). |
+| `--node-port <port>` | Customizes the VM-side (connect) port for --expose, so the host listens on the given port but proxies to this NodePort inside the VM (e.g. expose host 27017 -> VM NodePort 32017). |
+| `--delete-expose <vm-name:ports>` | Remove proxied ports from a VM (e.g., "k3s-control:80,443"). |
+| `--copy` | For two-phase flows that surface a command for the user to execute (e.g. --create-admin-profile phase 1), copy the command to the clipboard instead of printing it to the terminal. |
+| `--namespace <namespace>` | Kubernetes namespace context (defaults to "default"). |
+| `--maas-project <project>` | LXD project managed by MAAS (e.g. "k3s-cluster"). When set, all lxc commands target this project so MAAS enumerates the VMs in its machines UI. |
+| `--move-to-project` | Stop the [vm-id] VM in the default project, move it to --maas-project, then start it so MAAS picks it up. Requires --maas-project. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost baremetal
+
+Manages baremetal server operations, including installation, database setup, commissioning, and user management.
+
+**Usage:** `underpost baremetal [options] [workflow-id]`
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--ip-address <ip-address>` | The IP address of the control server or the local machine. |
+| `--hostname <hostname>` | The hostname of the target baremetal machine. |
+| `--ip-file-server <ip-file-server>` | The IP address of the file server (NFS/TFTP). |
+| `--ip-config <ip-config>` | IP configuration string for the baremetal machine. |
+| `--netmask <netmask>` | Netmask of network. |
+| `--dns-server <dns-server>` | DNS server IP address. |
+| `--control-server-install` | Installs the baremetal control server. |
+| `--control-server-uninstall` | Uninstalls the baremetal control server. |
+| `--control-server-restart` | Restarts the baremetal control server. |
+| `--control-server-db-install` | Installs up the database for the baremetal control server. |
+| `--control-server-db-uninstall` | Uninstalls the database for the baremetal control server. |
+| `--create-machine` | Creates a new baremetal machine entry in the database. |
+| `--mac <mac>` | Specifies the MAC address for baremetal machine operations. Use "random" for random MAC, "hardware" to use device's actual MAC (no spoofing), or specify a MAC address. |
+| `--ipxe` | Chainloads iPXE to normalize identity before commissioning. |
+| `--ipxe-rebuild` | Forces rebuild of iPXE binary with embedded boot script. |
+| `--ipxe-build-iso <iso-path>` | Builds a standalone iPXE ISO with embedded script for the specified workflow ID. |
+| `--install-packer` | Installs Packer CLI. |
+| `--packer-maas-image-template <template-path>` | Creates a new image folder from canonical/packer-maas template path (requires workflow-id). |
+| `--packer-workflow-id <workflow-id>` | Specifies the workflow ID for Packer MAAS image operations. |
+| `--packer-maas-image-build` | Builds a MAAS image using Packer for the workflow specified by --packer-workflow-id. |
+| `--packer-maas-image-upload` | Uploads an existing MAAS image artifact without rebuilding for the workflow specified by --packer-workflow-id. |
+| `--packer-maas-image-cached` | Continue last build without removing artifacts (used with --packer-maas-image-build). |
+| `--remove-machines <system-ids>` | Removes baremetal machines by comma-separated system IDs, or use "all" |
+| `--clear-discovered` | Clears all discovered baremetal machines from the database. |
+| `--commission` | Init workflow for commissioning a physical machine. |
+| `--install-disk [device]` | Explicit target install disk for Rocky deployment (e.g. /dev/nvme0n1). Omit or leave empty to auto-detect the internal disk. |
+| `--no-auto-install` | Disables the ephemeral runtime AUTO_INSTALL fallback (controller must trigger install). |
+| `--no-remote-install` | Skips the controller-side remote install orchestration over SSH. |
+| `--worker` | Post-install infra role: join the deployed node as a Kubernetes worker (requires --control <ip>). Without this flag the node is set up as a control-plane. |
+| `--control <ip>` | Control-plane IP the worker node joins (used with --worker for kubeadm infra setup). |
+| `--ssh-key-dir <dir>` | Directory holding the SSH key pair used for commissioning/orchestration (expects <dir>/id_rsa and <dir>/id_rsa.pub). Overrides the workflow "sshKeyDir"; defaults to engine-private/deploy. Supports a leading ~. |
+| `--deploy-id <deploy-id>` | Deployment ID whose user key pair is used for SSH (key from engine-private/conf/<deploy-id>/users/<user>/id_rsa). Same user↔deployId↔key convention as the ssh command. |
+| `--user <user>` | SSH user paired with --deploy-id for key resolution and the login user on an existing control-plane (defaults to root). Mirrors the ssh command --user. |
+| `--engine-repo <url>` | Custom engine repo cloned + normalized to /home/dd/engine on the node (default: <GITHUB_USERNAME>/engine). |
+| `--engine-branch <branch>` | Branch of the engine repo to clone on the node. |
+| `--engine-private-repo <url>` | Custom private repo cloned + normalized to /home/dd/engine/engine-private on the node (default: <GITHUB_USERNAME>/engine-<id>-private). |
+| `--engine-private-branch <branch>` | Branch of the engine-private repo to clone on the node. |
+| `--bootstrap-http-server-run` | Runs a temporary bootstrap HTTP server for generic purposes such as serving iPXE scripts or ISO images during commissioning. |
+| `--bootstrap-http-server-path <path>` | Sets a custom bootstrap HTTP server path for baremetal commissioning. |
+| `--bootstrap-http-server-port <port>` | Sets a custom bootstrap HTTP server port for baremetal commissioning. |
+| `--iso-url <url>` | Uses a custom ISO URL for baremetal machine commissioning. |
+| `--nfs-build` | Builds an NFS root filesystem for a workflow id config architecture using QEMU emulation. |
+| `--nfs-mount` | Mounts the NFS root filesystem for a workflow id config architecture. |
+| `--nfs-reset` | Resets the NFS server completely, closing all connections before reloading exports. |
+| `--nfs-unmount` | Unmounts the NFS root filesystem for a workflow id config architecture. |
+| `--nfs-build-server` | Builds the NFS server for a workflow id config architecture. |
+| `--nfs-sh` | Copies QEMU emulation root entrypoint shell command to the clipboard. |
+| `--cloud-init` | Sets the kernel parameters and sets the necessary seed users on the HTTP server. |
+| `--cloud-init-update` | Updates cloud init for a workflow id config architecture. |
+| `--ubuntu-tools-build` | Builds ubuntu tools for chroot environment. |
+| `--ubuntu-tools-test` | Tests ubuntu tools in chroot environment. |
+| `--rocky-tools-build` | Builds rocky linux tools for chroot environment. |
+| `--rocky-tools-test` | Tests rocky linux tools in chroot environment. |
+| `--bootcmd <bootcmd-list>` | Comma-separated list of boot commands to execute. |
+| `--runcmd <runcmd-list>` | Comma-separated list of run commands to execute. |
+| `--logs <log-id>` | Displays logs for log id: dhcp,dhcp-lease,dhcp-lan,cloud-init,cloud-init-machine,cloud-init-config |
+| `--dev` | Sets the development context environment for baremetal operations. |
+| `--ls` | Lists available boot resources and machines. |
+| `--resume-infra-setup` | Skip commissioning, OS install, and all bootstrapping; resume only the SSH-based infra setup (kubeadm join/init) on a node that already has the OS installed and is reachable via SSH. |
+| `--resume-join` | Skip everything except the kubeadm join command. Assumes engine, Node.js, CRI-O, kubelet, and kubeadm are already installed. Only retrieves a fresh join token from the control-plane and runs kubeadm join. |
+| `-h, --help` | display help for command |
+
+---
+
+### underpost release
+
+Release orchestrator for building new versions and deploying releases of the Underpost CLI.
+
+**Usage:** `underpost release [options] [version]`
+
+#### Arguments
+
+| Argument | Description |
+| --- | --- |
+| `version` | The new version string to set (e.g., "3.1.4"). Defaults to current version. |
+
+#### Options
+
+| Option | Description |
+| --- | --- |
+| `--build` | Builds a new version: tests template, bumps versions, rebuilds manifests and configs. |
+| `--deploy` | Deploys the release: syncs secrets, commits, and pushes to remote repositories. |
+| `--ci-push <deploy-id>` | Local equivalent of engine-*.ci.yml: builds dd-{deploy-id} and pushes to the engine-{deploy-id} repository. Accepts the suffix (e.g., "cyberia"), "dd-cyberia", or "engine-cyberia". |
+| `--message <message>` | Commit message for --ci-push or --pwa-build (defaults to last commit of the engine repository). |
+| `--pwa-build` | Runs the pwa-microservices-template update flow: always re-clones, syncs engine sources, installs, builds, and pushes. |
+| `--dry-run` | For --build: previews version-bump changes (per-file substitution counts) without writing files or running downstream commands. |
+| `--mongo-host <host>` | For --build: override DB_HOST in the template .env.example for the smoke test (e.g., "192.168.1.82:27017"). |
+| `--mongo-user <user>` | For --build: override DB_USER in the template .env.example for the smoke test. |
+| `--mongo-password <password>` | For --build: override DB_PASSWORD in the template .env.example for the smoke test. |
+| `--valkey-host <host>` | For --build: override VALKEY_HOST in the template .env.example for the smoke test (e.g., "192.168.1.82"). |
+| `-h, --help` | display help for command |
+
+---

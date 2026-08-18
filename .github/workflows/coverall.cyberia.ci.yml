@@ -1,0 +1,87 @@
+name: CI | Coverall Cyberia
+
+on:
+  push:
+    branches: ['master', 'main']
+  pull_request:
+    branches: ['master', 'main']
+
+jobs:
+  test:
+    name: Coverall Cyberia Test
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      (github.repository == 'underpostnet/engine' ||
+       github.repository == 'underpostnet/engine-cyberia' ||
+       github.repository == 'underpostnet/engine-ghpkg-cyberia')
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/rockylinux/rockylinux:9
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v7
+
+      - name: Install required packages
+        run: |
+          dnf install -y sudo tar gzip bzip2 git bash
+          dnf install -y curl --allowerasing
+
+      - name: Install Node.js
+        run: |
+          curl -fsSL https://rpm.nodesource.com/setup_24.x | bash -
+          dnf install nodejs -y
+
+      - name: Install project dependencies
+        run: npm install
+
+      - name: Run tests and generate coverage
+        run: scripts/coverall-test-cyberia.sh
+
+      - name: Store coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverall-cyberia-lcov
+          path: ./coverage/lcov.info
+          if-no-files-found: error
+
+  upload:
+    name: Upload Cyberia Coverage to Coveralls
+    needs: test
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      (github.repository == 'underpostnet/engine' ||
+       github.repository == 'underpostnet/engine-cyberia' ||
+       github.repository == 'underpostnet/engine-ghpkg-cyberia')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v7
+
+      - name: Restore coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverall-cyberia-lcov
+          path: ./coverage
+
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./coverage/lcov.info
+          flag-name: cyberia
+          parallel: true
+
+  finish:
+    needs: upload
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      (github.repository == 'underpostnet/engine' ||
+       github.repository == 'underpostnet/engine-cyberia' ||
+       github.repository == 'underpostnet/engine-ghpkg-cyberia')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Coveralls Finished
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          parallel-finished: true

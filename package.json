@@ -3,10 +3,11 @@
     "main": "src/index.js",
     "name": "@underpostnet/underpost",
     "version": "3.2.90",
-    "description": "Underpost Platform — end-to-end CI/CD and application-delivery toolchain CLI. Covers bare metal, Kubernetes, K3s, kubeadm, LXD, container/image orchestration, secrets, databases, cron jobs, monitoring, SSH, runners, PWA + Workbox delivery, and release orchestration. Extensible via downstream CLIs.",
+    "description": "End to end cloud applications toolchain",
     "scripts": {
         "start": "node --max-old-space-size=8192 src/server",
         "build": "node bin client",
+        "build:template": "node bin/build.template ./ ../pwa-microservices-template",
         "test": "NODE_ENV=test c8 mocha",
         "test:monitor": "NODE_ENV=test c8 mocha test/deploy-monitor.test.js",
         "dev": "NODE_ENV=development nodemon src/server",
@@ -39,37 +40,22 @@
         "docker:status": "node bin docker-compose --status",
         "docker:shell": "node bin docker-compose --shell"
     },
-    "bin": {
-        "underpost": "bin/index.js"
-    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/underpostnet/pwa-microservices-template-ghpkg.git"
     },
     "keywords": [
-        "underpost",
-        "underpost-platform",
-        "cli",
-        "toolchain",
-        "ci-cd",
-        "devops",
-        "kubernetes",
-        "k3s",
-        "kubeadm",
-        "lxd",
-        "baremetal",
-        "container-orchestration",
-        "image-management",
-        "pwa",
-        "workbox",
-        "microservices"
+        "engine",
+        "server",
+        "proxy",
+        "client"
     ],
     "author": "https://github.com/underpostnet",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/underpostnet/pwa-microservices-template/issues"
+        "url": "https://github.com/underpostnet/engine/issues"
     },
-    "homepage": "https://github.com/underpostnet/pwa-microservices-template#readme",
+    "homepage": "https://github.com/underpostnet/engine#readme",
     "dependencies": {
         "@fortawesome/fontawesome-free": "^7.3.1",
         "@fullcalendar/rrule": "^7.0.2",

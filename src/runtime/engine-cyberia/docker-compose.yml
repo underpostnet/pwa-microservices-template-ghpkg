@@ -1,0 +1,439 @@
+# Cyberia ecosystem Docker Compose stack — canonical custom workflow.
+#
+# Orchestrates the entire Cyberia MMORPG on the underpost platform base
+# (MongoDB + Valkey + IPFS), then the Cyberia content-authority engine and its
+# per-instance server/client tiers, fronted by an nginx reverse proxy.
+#
+
+name: dd-cyberia
+
+services:
+  # === Tier 1: platform base (no dependencies) =============================
+
+  # --- MongoDB -------------------------------------------------------------
+  # replSet rs0, keyFile cluster auth, replica-set + root-user init over the
+  # loopback localhost exception. This custom workflow owns the mounted
+  # ./mongodb/entrypoint.sh bootstrap script.
+  mongodb:
+    image: ${MONGO_IMAGE:-mongo:latest}
+    container_name: dd-cyberia-mongodb
+    entrypoint: ['bash', '/docker-init/entrypoint.sh']
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?set MONGO_INITDB_ROOT_USERNAME in compose.env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?set MONGO_INITDB_ROOT_PASSWORD in compose.env}
+      DB_REPLICA_SET: ${DB_REPLICA_SET:-rs0}
+    volumes:
+      - ./mongodb:/docker-init:ro
+      - mongodb-keyfile:/opt/keyfile
+      - mongodb-data:/data/db
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '27017'
+    ports:
+      - '${MONGO_HOST_PORT:-27017}:27017'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          mongosh --quiet -u "$$MONGO_INITDB_ROOT_USERNAME" -p "$$MONGO_INITDB_ROOT_PASSWORD"
+          --authenticationDatabase admin --eval "db.hello().isWritablePrimary" | grep -q true
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  # --- Valkey --------------------------------------------------------------
+  valkey-service:
+    image: ${VALKEY_IMAGE:-valkey/valkey:latest}
+    container_name: dd-cyberia-valkey
+    command: ['valkey-server', '--port', '6379', '--bind', '0.0.0.0', '--protected-mode', 'no']
+    volumes:
+      - valkey-data:/data
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '6379'
+    ports:
+      - '${VALKEY_NODEPORT:-32079}:6379'
+    healthcheck:
+      test: ['CMD', 'valkey-cli', '-p', '6379', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # --- IPFS (Kubo daemon) --------------------------------------------------
+  # Content plane: add / pin / cat / files (MFS). The engine reaches it at
+  # http://ipfs:5001 (RPC) and http://ipfs:8080 (gateway). The init hook binds
+  # the API/gateway to 0.0.0.0 so the engine and ipfs-cluster can reach it.
+  ipfs:
+    image: ${IPFS_IMAGE:-ipfs/kubo:latest}
+    container_name: dd-cyberia-ipfs
+    volumes:
+      - ./ipfs/configure-ipfs.sh:/container-init.d/001-configure-ipfs.sh:ro
+      - ipfs-data:/data/ipfs
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '5001'
+      - '8080'
+      - '4001'
+    ports:
+      - '${IPFS_API_PORT:-5001}:5001'
+      - '${IPFS_GATEWAY_PORT:-8080}:8080'
+    healthcheck:
+      test: ['CMD-SHELL', 'ipfs --api=/ip4/127.0.0.1/tcp/5001 id >/dev/null 2>&1 || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # --- IPFS Cluster (pin orchestration) ------------------------------------
+  # Serves the Cluster REST API on :9094 (engine IPFS_CLUSTER_API_URL). Drives
+  # the shared Kubo daemon and starts only once Kubo is healthy.
+  ipfs-cluster:
+    image: ${IPFS_CLUSTER_IMAGE:-ipfs/ipfs-cluster:latest}
+    container_name: dd-cyberia-ipfs-cluster
+    depends_on:
+      ipfs:
+        condition: service_healthy
+    environment:
+      CLUSTER_PEERNAME: dd-cyberia-cluster
+      # 32-byte hex shared secret. Fixed dev default keeps the cluster identity
+      # stable across restarts; override in compose.env for anything shared.
+      CLUSTER_SECRET: ${CLUSTER_SECRET:-0e1d2c3b4a59687778695a4b3c2d1e0f0e1d2c3b4a59687778695a4b3c2d1e0f}
+      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs/tcp/5001
+      CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
+      CLUSTER_CRDT_TRUSTEDPEERS: '*'
+    volumes:
+      - ipfs-cluster-data:/data/ipfs-cluster
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '9094'
+      - '9096'
+    ports:
+      - '${IPFS_CLUSTER_API_PORT:-9094}:9094'
+    healthcheck:
+      test: ['CMD-SHELL', 'ipfs-cluster-ctl --host /ip4/127.0.0.1/tcp/9094 id >/dev/null 2>&1 || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # === Tier 2: content authority (waits for mongo + valkey + ipfs) =========
+
+  # --- engine-cyberia ------------------------------------------------------
+  # The single shared underpost engine for deploy dd-cyberia: content authority
+  # and asset provider for EVERY instance. Its boot imports every multiInstance
+  # variant that has local content (amethyst + FOREST; TEST has none yet, so its
+  # server starts but rejects connections until seeded). Serves REST/WS on 4005
+  # and the engine gRPC data service on 50051.
+  engine-cyberia-runtime:
+    image: ${ENGINE_CYBERIA_IMAGE:-underpost/engine-cyberia-dev}:${ENGINE_CYBERIA_TAG:-v3.2.90}
+    container_name: dd-cyberia-engine
+    command:
+      - /bin/sh
+      - -c
+      - >
+        node bin/cyberia run-workflow import-default-items &&
+        underpost start --run dd-cyberia development
+    env_file:
+      - ./compose.env
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DB_PROVIDER: ${DB_PROVIDER:-mongoose}
+      DB_HOST: ${DB_HOST:-mongodb://mongodb:27017}
+      DB_REPLICA_SET: ${DB_REPLICA_SET:-rs0}
+      DB_AUTH_SOURCE: ${DB_AUTH_SOURCE:-admin}
+      DB_USER: ${MONGO_INITDB_ROOT_USERNAME:?}
+      DB_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?}
+      VALKEY_HOST: ${VALKEY_HOST:-valkey-service}
+      VALKEY_PORT: ${VALKEY_PORT:-6379}
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '4005'
+      - '50051'
+    ports:
+      - '${ENGINE_CYBERIA_REST_PORT:-4005}:4005'
+      - '${ENGINE_CYBERIA_GRPC_PORT:-50051}:50051'
+    healthcheck:
+      test: ['CMD-SHELL', "timeout 2 bash -c '</dev/tcp/127.0.0.1/4005' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # The dd-cyberia build is baked into the image; start just runs the
+      # engine, so a moderate start_period covers DB connect + multi-import.
+      start_period: 180s
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      valkey-service:
+        condition: service_healthy
+      ipfs:
+        condition: service_healthy
+      ipfs-cluster:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # === Tier 3: authoritative simulation, one per variant ===================
+  # All three share engine-cyberia (content + gRPC) and differ by INSTANCE_CODE
+  # and CYBERIA_BASE_PATH. Each server owns its public path and waits for the
+  # stable gateway, which itself waits for the engine runtime to be healthy.
+  # All variants are internal-only. The proxy publishes a dedicated server
+  # gateway on host port 8081, so one port can route every instance path.
+
+  cyberia-server-runtime:
+    image: ${CYBERIA_SERVER_IMAGE:-underpost/cyberia-server-dev}:${CYBERIA_SERVER_TAG:-v3.2.90}
+    container_name: dd-cyberia-server
+    environment:
+      INSTANCE_CODE: amethyst-strata-expansion
+      CYBERIA_BASE_PATH: /
+      ENGINE_API_BASE_URL: ${ENGINE_API_BASE_URL:-http://engine-cyberia}
+      ENGINE_PUBLIC_URL: ${ENGINE_PUBLIC_URL:-http://localhost:4005}
+      ENGINE_GRPC_ADDRESS: ${ENGINE_GRPC_ADDRESS:-engine-cyberia-runtime:50051}
+      ENGINE_GRPC_RELOAD_INTERVAL_SEC: ${ENGINE_GRPC_RELOAD_INTERVAL_SEC:-300}
+      STATIC_DIR: ${CYBERIA_SERVER_STATIC_DIR:-/home/dd/engine/cyberia-server/public}
+      APP_ENV: ${CYBERIA_SERVER_APP_ENV:-development}
+      LOG_LEVEL: ${CYBERIA_SERVER_LOG_LEVEL:-}
+      CYBERIA_DISABLE_CONNECTION_LIMITS: ${CYBERIA_DISABLE_CONNECTION_LIMITS:-}
+      CYBERIA_MAX_CONNECTIONS: ${CYBERIA_MAX_CONNECTIONS:-}
+      CYBERIA_MAX_CONNECTIONS_PER_IP: ${CYBERIA_MAX_CONNECTIONS_PER_IP:-}
+      CYBERIA_CONNECT_RATE_PER_IP: ${CYBERIA_CONNECT_RATE_PER_IP:-}
+      CYBERIA_CONNECT_BURST_PER_IP: ${CYBERIA_CONNECT_BURST_PER_IP:-}
+      CYBERIA_MESSAGE_RATE: ${CYBERIA_MESSAGE_RATE:-}
+      CYBERIA_MESSAGE_BURST: ${CYBERIA_MESSAGE_BURST:-}
+      CYBERIA_MAX_STRIKES: ${CYBERIA_MAX_STRIKES:-}
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '8081'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8081/api/v1/health/ready >/dev/null || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      proxy:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cyberia-server-forest:
+    image: ${CYBERIA_SERVER_IMAGE:-underpost/cyberia-server-dev}:${CYBERIA_SERVER_TAG:-v3.2.90}
+    container_name: dd-cyberia-server-forest
+    environment:
+      INSTANCE_CODE: FOREST
+      CYBERIA_BASE_PATH: /FOREST
+      ENGINE_API_BASE_URL: ${ENGINE_API_BASE_URL:-http://engine-cyberia}
+      ENGINE_PUBLIC_URL: ${ENGINE_PUBLIC_URL:-http://localhost:4005}
+      ENGINE_GRPC_ADDRESS: ${ENGINE_GRPC_ADDRESS:-engine-cyberia-runtime:50051}
+      ENGINE_GRPC_RELOAD_INTERVAL_SEC: ${ENGINE_GRPC_RELOAD_INTERVAL_SEC:-300}
+      STATIC_DIR: ${CYBERIA_SERVER_STATIC_DIR:-/home/dd/engine/cyberia-server/public}
+      APP_ENV: ${CYBERIA_SERVER_APP_ENV:-development}
+      LOG_LEVEL: ${CYBERIA_SERVER_LOG_LEVEL:-}
+      CYBERIA_DISABLE_CONNECTION_LIMITS: ${CYBERIA_DISABLE_CONNECTION_LIMITS:-}
+      CYBERIA_MAX_CONNECTIONS: ${CYBERIA_MAX_CONNECTIONS:-}
+      CYBERIA_MAX_CONNECTIONS_PER_IP: ${CYBERIA_MAX_CONNECTIONS_PER_IP:-}
+      CYBERIA_CONNECT_RATE_PER_IP: ${CYBERIA_CONNECT_RATE_PER_IP:-}
+      CYBERIA_CONNECT_BURST_PER_IP: ${CYBERIA_CONNECT_BURST_PER_IP:-}
+      CYBERIA_MESSAGE_RATE: ${CYBERIA_MESSAGE_RATE:-}
+      CYBERIA_MESSAGE_BURST: ${CYBERIA_MESSAGE_BURST:-}
+      CYBERIA_MAX_STRIKES: ${CYBERIA_MAX_STRIKES:-}
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '8081'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8081/FOREST/api/v1/health/ready >/dev/null || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      proxy:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cyberia-server-test:
+    image: ${CYBERIA_SERVER_IMAGE:-underpost/cyberia-server-dev}:${CYBERIA_SERVER_TAG:-v3.2.90}
+    container_name: dd-cyberia-server-test
+    environment:
+      INSTANCE_CODE: TEST
+      CYBERIA_BASE_PATH: /TEST
+      ENGINE_API_BASE_URL: ${ENGINE_API_BASE_URL:-http://engine-cyberia}
+      ENGINE_PUBLIC_URL: ${ENGINE_PUBLIC_URL:-http://localhost:4005}
+      ENGINE_GRPC_ADDRESS: ${ENGINE_GRPC_ADDRESS:-engine-cyberia-runtime:50051}
+      ENGINE_GRPC_RELOAD_INTERVAL_SEC: ${ENGINE_GRPC_RELOAD_INTERVAL_SEC:-300}
+      STATIC_DIR: ${CYBERIA_SERVER_STATIC_DIR:-/home/dd/engine/cyberia-server/public}
+      APP_ENV: ${CYBERIA_SERVER_APP_ENV:-development}
+      LOG_LEVEL: ${CYBERIA_SERVER_LOG_LEVEL:-}
+      CYBERIA_DISABLE_CONNECTION_LIMITS: ${CYBERIA_DISABLE_CONNECTION_LIMITS:-}
+      CYBERIA_MAX_CONNECTIONS: ${CYBERIA_MAX_CONNECTIONS:-}
+      CYBERIA_MAX_CONNECTIONS_PER_IP: ${CYBERIA_MAX_CONNECTIONS_PER_IP:-}
+      CYBERIA_CONNECT_RATE_PER_IP: ${CYBERIA_CONNECT_RATE_PER_IP:-}
+      CYBERIA_CONNECT_BURST_PER_IP: ${CYBERIA_CONNECT_BURST_PER_IP:-}
+      CYBERIA_MESSAGE_RATE: ${CYBERIA_MESSAGE_RATE:-}
+      CYBERIA_MESSAGE_BURST: ${CYBERIA_MESSAGE_BURST:-}
+      CYBERIA_MAX_STRIKES: ${CYBERIA_MAX_STRIKES:-}
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '8081'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8081/TEST/api/v1/health/ready >/dev/null || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      proxy:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # === Tier 4: presentation, one per variant ===============================
+  # One WASM bundle serves every variant; the instance is resolved from the URL
+  # sub-path (docker-driver injects CYBERIA_BASE_PATH / _WS_ORIGIN /
+  # _ENGINE_API_ORIGIN / _DEFAULT_INSTANCE). Each client waits ONLY for its own
+  # server, so the three
+  # server->client pipelines advance independently (in parallel) once the shared
+  # engine-cyberia is healthy:
+  #   cyberia-server        -> cyberia-client
+  #   cyberia-server-forest -> cyberia-client-forest
+  #   cyberia-server-test   -> cyberia-client-test
+
+  cyberia-client-runtime:
+    image: ${CYBERIA_CLIENT_IMAGE:-underpost/cyberia-client-dev}:${CYBERIA_CLIENT_TAG:-v3.2.90}
+    container_name: dd-cyberia-client
+    environment:
+      CYBERIA_PORT: '8081'
+      CYBERIA_INSTANCE_CODE: amethyst-strata-expansion
+      CYBERIA_BASE_PATH: /
+      CYBERIA_DEFAULT_INSTANCE: ${CYBERIA_DEFAULT_INSTANCE:-amethyst-strata-expansion}
+      CYBERIA_WS_ORIGIN: ${CYBERIA_WS_ORIGIN:-ws://localhost:8081}
+      CYBERIA_ENGINE_API_ORIGIN: ${CYBERIA_ENGINE_API_ORIGIN:-http://localhost}
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '8081'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8081/ >/dev/null || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      cyberia-server-runtime:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cyberia-client-forest:
+    image: ${CYBERIA_CLIENT_IMAGE:-underpost/cyberia-client-dev}:${CYBERIA_CLIENT_TAG:-v3.2.90}
+    container_name: dd-cyberia-client-forest
+    environment:
+      CYBERIA_PORT: '8081'
+      CYBERIA_INSTANCE_CODE: FOREST
+      CYBERIA_BASE_PATH: /FOREST
+      CYBERIA_DEFAULT_INSTANCE: ${CYBERIA_DEFAULT_INSTANCE:-amethyst-strata-expansion}
+      CYBERIA_WS_ORIGIN: ${CYBERIA_WS_ORIGIN:-ws://localhost:8081}
+      CYBERIA_ENGINE_API_ORIGIN: ${CYBERIA_ENGINE_API_ORIGIN:-http://localhost}
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '8081'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8081/FOREST/ >/dev/null || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      cyberia-server-forest:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cyberia-client-test:
+    image: ${CYBERIA_CLIENT_IMAGE:-underpost/cyberia-client-dev}:${CYBERIA_CLIENT_TAG:-v3.2.90}
+    container_name: dd-cyberia-client-test
+    environment:
+      CYBERIA_PORT: '8081'
+      CYBERIA_INSTANCE_CODE: TEST
+      CYBERIA_BASE_PATH: /TEST
+      CYBERIA_DEFAULT_INSTANCE: ${CYBERIA_DEFAULT_INSTANCE:-amethyst-strata-expansion}
+      CYBERIA_WS_ORIGIN: ${CYBERIA_WS_ORIGIN:-ws://localhost:8081}
+      CYBERIA_ENGINE_API_ORIGIN: ${CYBERIA_ENGINE_API_ORIGIN:-http://localhost}
+    networks:
+      - dd-cyberia-internal
+    expose:
+      - '8081'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8081/TEST/ >/dev/null || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      cyberia-server-test:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # === Stable HTTP gateway =================================================
+  # Routes stable Docker DNS names and localhost paths to their per-variant
+  # upstreams with websocket upgrade. Config source of truth: ./nginx.conf,
+  # maintained by this custom workflow. Ports 80 and 8082 serve the multi-path
+  # client gateway; port 8081 is the multi-path server gateway. It starts as
+  # soon as the engine is healthy so server startup can safely use the stable
+  # engine-cyberia HTTP alias. Client/server upstreams resolve lazily as their
+  # independently health-gated pipelines become available.
+  proxy:
+    image: ${PROXY_IMAGE:-nginx:stable-alpine}
+    container_name: dd-cyberia-proxy
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      dd-cyberia-internal:
+        aliases:
+          - cyberia-client
+          - cyberia-server
+          - engine-cyberia
+    ports:
+      - '${PROXY_HTTP_PORT:-80}:80'
+      - '${CYBERIA_SERVER_PORT:-8081}:8081'
+      - '${CYBERIA_CLIENT_PORT:-8082}:80'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget -q -O /dev/null http://127.0.0.1/healthz &&
+          wget -q -O /dev/null http://127.0.0.1:8081/healthz
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      engine-cyberia-runtime:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  dd-cyberia-internal:
+    name: dd-cyberia-internal
+    driver: bridge
+
+volumes:
+  mongodb-data:
+    name: dd-cyberia-mongodb-data
+  mongodb-keyfile:
+    name: dd-cyberia-mongodb-keyfile
+  valkey-data:
+    name: dd-cyberia-valkey-data
+  ipfs-data:
+    name: dd-cyberia-ipfs-data
+  ipfs-cluster-data:
+    name: dd-cyberia-ipfs-cluster-data

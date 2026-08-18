@@ -3,6 +3,7 @@
 /public
 /engine-private
 /conf
+.claude
 /tmp
 /logs
 /build
@@ -11,6 +12,7 @@
 .env.production
 .env.development
 .env.test
+/docker
 /prometheus_data
 /grafana_data
 /images
@@ -45,3 +47,20 @@ packer/images/*/*.iso
 /cyberia-client
 *pub.json
 gitleaks-report.json
+
+# Ignore ERP / CRM custom prototypes src
+/src/api/**/*healthcare*
+/src/client/public/bymyelectrics
+/src/client/public/cecinasmarcelina
+/src/client/public/healthcare
+/src/client/**/*Bymyelectrics*
+/src/client/**/*Cecinasmarcelina*
+/src/client/**/*Healthcare*
+/src/client/**/*bymelectrics*
+/src/client/**/*cecinasmarcelina*
+/src/client/**/*healthcare*
+
+# Age private key material. Encrypted SOPS manifests are safe to commit; keys never are.
+**/keys.txt
+**/*.agekey
+*.age.key
