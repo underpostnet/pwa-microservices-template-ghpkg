@@ -1,15 +1,15 @@
 {
-  "name": "Default",
-  "short_name": "Default",
-  "description": null,
+  "name": "PWA Demo App",
+  "short_name": "PWA Demo App",
+  "description": "Web application",
   "dir": "auto",
   "lang": "en-US",
   "display": "standalone",
   "orientation": "any",
   "scope": "/",
   "start_url": "/?homescreen=1",
-  "background_color": "#fff",
-  "theme_color": "#fff",
+  "background_color": "#ececec",
+  "theme_color": "#ececec",
   "icons": [
     {
       "src": "/android-chrome-36x36.png",
