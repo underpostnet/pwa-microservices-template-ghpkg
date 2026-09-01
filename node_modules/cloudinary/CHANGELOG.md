@@ -1,3 +1,10 @@
+2.11.0 / 2026-08-27
+==================
+
+* add support for image_file in visual_search Admin API (#740)
+* add clear_invalid support to UploadAPI#explicit (#736)
+* add support for 429 Too Many Requests HTTP status code (#735)
+
 2.10.1 / 2026-08-19
 ==================
 
